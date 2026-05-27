@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ghc-101",
+    "body": "Please add a regression test for this branch.",
+    "path": "tests/unit/test_module.py",
+    "line": 12,
+    "html_url": "https://example.com/comment/101",
+    "user": {
+      "login": "maintainer"
+    }
+  }
+]

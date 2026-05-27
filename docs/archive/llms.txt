@@ -1,0 +1,28 @@
+Project: PR Repair Pipeline
+Purpose: Local-first, repo-aware PR repair microservice for L9-governed repositories.
+
+Core behaviors:
+- ingest findings from CodeRabbit, Codecov, GitHub checks, and comments
+- normalize findings into canonical typed records
+- dedupe by stable fingerprint
+- classify against repo governance, tiers, and path policy
+- plan deterministic repairs
+- execute exact-match patch instructions only
+- verify with repo contract
+- emit review-only learning recommendations
+
+Critical constraints:
+- tool findings outrank comments
+- protected paths require escalation
+- write ceiling must be enforced
+- no direct AGENT.md mutation
+- no direct validator mutation
+- no force push
+- rollback on verification failure
+
+Important commands:
+- make pr-fix-dry
+- make pr-fix-propose
+- make pr-fix
+- make pr-fix-verify
+- make pr-fix-learn

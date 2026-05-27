@@ -1,0 +1,25 @@
+[
+  {
+    "number": 101,
+    "title": "Fix CI contract drift",
+    "draft": false,
+    "head": {
+      "ref": "fix/ci-contract",
+      "sha": "sha-101"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "user": {
+      "login": "dev-a"
+    },
+    "labels": [
+      {
+        "name": "ci-failing"
+      },
+      {
+        "name": "bug"
+      }
+    ]
+  }
+]

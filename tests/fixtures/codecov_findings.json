@@ -1,0 +1,11 @@
+[
+  {
+    "id": "cc-101",
+    "message": "Changed code lacks patch coverage.",
+    "path": "engine/module.py",
+    "start_line": 30,
+    "end_line": 42,
+    "severity": "medium",
+    "category": "codecov_patch_coverage_failure"
+  }
+]

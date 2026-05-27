@@ -1,0 +1,28 @@
+[project]
+name = "pr-repair"
+version = "0.3.0"
+description = "Local-first PR repair pipeline for L9-governed repositories."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.8",
+  "python-dotenv>=1.0",
+  "requests>=2.32",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+pr-repair = "pr_repair.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
