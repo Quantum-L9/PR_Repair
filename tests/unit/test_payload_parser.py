@@ -114,7 +114,7 @@ def test_to_bundle_collects_all_findings(tmp_path: Path) -> None:
 
     assert len(bundle.agent_review_findings) == 2
     assert len(bundle.merged_findings) == 2
-    assert bundle.coderabbit_findings == []
+    assert bundle.github_check_findings == []
 
 
 def test_missing_file_fails_closed(tmp_path: Path) -> None:

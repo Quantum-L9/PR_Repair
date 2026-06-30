@@ -11,9 +11,9 @@
 """Deterministic ingestion for the canonical agent_review_payload.json contract.
 
 This module is the single source of truth for how the Implementer Bot learns
-what to fix. It replaces the legacy third-party scrapers (CodeRabbit / Codecov /
-comment ingestion). Findings arrive pre-clustered and pre-deduplicated from the
-upstream Audit Bot, split into deterministic ``autofix_candidates`` and
+what to fix. It replaces the legacy third-party review scrapers and comment
+ingestion. Findings arrive pre-clustered and pre-deduplicated from the upstream
+Audit Bot, split into deterministic ``autofix_candidates`` and
 ``manual_review_required`` buckets, and are validated against a versioned JSON
 Schema before any repair is attempted.
 """

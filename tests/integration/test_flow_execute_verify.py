@@ -46,7 +46,7 @@ def test_flow_execute_verify_rolls_through_happy_path(tmp_path: Path) -> None:
             Finding(
                 finding_id="f-202",
                 pr_number=202,
-                source_name=SourceName.coderabbit,
+                source_name=SourceName.agent_review,
                 source_priority=100,
                 severity=Severity.medium,
                 category="lint_failure",

@@ -32,8 +32,6 @@ class ExecutionMode(str, Enum):
 
 class SourceName(str, Enum):
     agent_review = "agent_review"
-    coderabbit = "coderabbit"
-    codecov_cloud = "codecov_cloud"
     github_checks = "github_checks"
     github_review_comments = "github_review_comments"
     github_issue_comments = "github_issue_comments"
@@ -144,8 +142,6 @@ class NormalizationError(BaseModel):
 class FindingBundle(BaseModel):
     pr_ref: PRRef
     agent_review_findings: list[Finding] = Field(default_factory=list)
-    coderabbit_findings: list[Finding] = Field(default_factory=list)
-    codecov_findings: list[Finding] = Field(default_factory=list)
     github_check_findings: list[Finding] = Field(default_factory=list)
     github_comment_findings: list[Finding] = Field(default_factory=list)
     merged_findings: list[Finding] = Field(default_factory=list)

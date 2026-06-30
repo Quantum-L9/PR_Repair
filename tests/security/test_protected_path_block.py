@@ -28,7 +28,7 @@ def test_protected_path_finding_blocks_execution(tmp_path) -> None:
         Finding(
             finding_id="f-303",
             pr_number=303,
-            source_name=SourceName.coderabbit,
+            source_name=SourceName.agent_review,
             source_priority=100,
             severity=Severity.high,
             category="protected_file_violation",

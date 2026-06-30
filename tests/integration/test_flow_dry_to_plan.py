@@ -43,14 +43,14 @@ def test_flow_dry_to_plan_produces_safe_t1_plan(tmp_path) -> None:
     )
     bundle = FindingBundle(
         pr_ref=pr,
-        coderabbit_findings=[
+        agent_review_findings=[
             Finding(
                 finding_id="f-101",
                 pr_number=101,
-                source_name=SourceName.coderabbit,
+                source_name=SourceName.agent_review,
                 source_priority=100,
                 severity=Severity.medium,
-                category="coderabbit_style_violation",
+                category="style_violation",
                 message="Unused import detected.",
                 file_path="scripts/example.py",
                 line_start=4,
@@ -64,7 +64,7 @@ def test_flow_dry_to_plan_produces_safe_t1_plan(tmp_path) -> None:
     )
 
     normalized = normalize_bundle(bundle)
-    merged = normalized.coderabbit_findings
+    merged = normalized.agent_review_findings
     classified = classify_findings(merged, repo_context)
     plan = build_repair_plan(pr, classified, config)
 

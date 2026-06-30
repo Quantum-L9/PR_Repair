@@ -28,7 +28,7 @@ def test_build_repair_plan_marks_low_risk_t1_plan_executable(tmp_path) -> None:
         Finding(
             finding_id="f-1",
             pr_number=9,
-            source_name=SourceName.coderabbit,
+            source_name=SourceName.agent_review,
             source_priority=100,
             severity=Severity.medium,
             category="lint_failure",
@@ -80,7 +80,7 @@ def test_build_repair_plan_blocks_protected_path_execution(tmp_path) -> None:
         Finding(
             finding_id="f-2",
             pr_number=10,
-            source_name=SourceName.coderabbit,
+            source_name=SourceName.agent_review,
             source_priority=100,
             severity=Severity.high,
             category="protected_file_violation",

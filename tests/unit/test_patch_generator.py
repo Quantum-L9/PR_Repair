@@ -22,7 +22,7 @@ def test_generate_patch_instructions_only_emits_line_bound_suggested_repairs() -
             Finding(
                 finding_id="f-1",
                 pr_number=1,
-                source_name=SourceName.coderabbit,
+                source_name=SourceName.agent_review,
                 source_priority=100,
                 severity=Severity.medium,
                 category="lint_failure",
@@ -39,7 +39,7 @@ def test_generate_patch_instructions_only_emits_line_bound_suggested_repairs() -
             Finding(
                 finding_id="f-2",
                 pr_number=1,
-                source_name=SourceName.coderabbit,
+                source_name=SourceName.agent_review,
                 source_priority=100,
                 severity=Severity.medium,
                 category="lint_failure",

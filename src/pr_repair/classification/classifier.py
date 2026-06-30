@@ -76,7 +76,7 @@ def _infer_category(finding: Finding) -> str:
     source_name = finding.source_name.value
 
     if "coverage" in message:
-        return "codecov_missing_tests_for_changed_code"
+        return "missing_tests_for_changed_code"
     if "mypy" in message or "type" in message:
         return "typing_failure"
     if "ruff" in message or "lint" in message or "format" in message or "unused import" in message:
@@ -86,13 +86,9 @@ def _infer_category(finding: Finding) -> str:
     if "yaml.load" in message or "safe_load" in message:
         return "compliance_failure"
     if "credential" in message or "api key" in message or "token" in message:
-        return "coderabbit_security_issue"
+        return "security_issue"
     if source_name == "github_checks":
         return "github_required_check_failure"
-    if source_name == "codecov_cloud":
-        return "codecov_patch_coverage_failure"
-    if source_name == "coderabbit":
-        return "coderabbit_style_violation"
     return finding.category or "ambiguous_comment"
 
 

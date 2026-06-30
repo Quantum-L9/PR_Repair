@@ -41,8 +41,6 @@ def write_pr_artifacts(
     pr_dir = f"prs/pr_{bundle.pr_ref.pr_number}"
     raw_count = (
         len(bundle.agent_review_findings)
-        + len(bundle.coderabbit_findings)
-        + len(bundle.codecov_findings)
         + len(bundle.github_check_findings)
         + len(bundle.github_comment_findings)
     )
