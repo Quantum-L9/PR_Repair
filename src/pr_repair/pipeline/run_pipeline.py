@@ -19,8 +19,10 @@ from pr_repair.ingestion.payload_parser import PayloadParser
 from pr_repair.learning.agent_md_recommender import build_agent_md_recommendations
 from pr_repair.learning.pattern_extractor import extract_learning_packets
 from pr_repair.learning.validator_recommender import build_validator_recommendations
+from pr_repair.llm import build_llm_client
 from pr_repair.logging import configure_logging, log_event
 from pr_repair.orchestration.router import route_findings
+from pr_repair.planning.llm_proposer import propose_repairs
 from pr_repair.output.artifact_writer import (
     write_learning_artifacts,
     write_pr_artifacts,
@@ -91,6 +93,21 @@ def run_pipeline(config: AppConfig) -> int:
         autofix=len(route.autofix),
         manual=len(route.manual),
     )
+
+    # Manual lane: ask the shared L9 LLM-Router for bounded patch proposals.
+    # Proposals are surfaced for human review, never auto-applied. With the
+    # default NullLLMClient this is a no-op (every finding abstains).
+    proposals = propose_repairs(
+        route.manual,
+        build_llm_client(config),
+        repo_root,
+        config.llm_client_id,
+    )
+    if proposals:
+        store.write_json(
+            f"prs/pr_{pr.pr_number}/llm_proposals.json",
+            [proposal.model_dump(mode="json") for proposal in proposals],
+        )
 
     plan = build_repair_plan(pr, classified_findings, config)
 

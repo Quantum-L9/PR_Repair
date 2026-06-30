@@ -1,0 +1,15 @@
+{
+  "name": "l9-implementer-router-shim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stateless stdin/stdout bridge from the Python Implementer Bot to the shared @quantum-l9/llm-router.",
+  "bin": { "l9-router-shim": "./shim.mjs" },
+  "scripts": {
+    "setup": "bash ./setup.sh"
+  },
+  "dependencies": {
+    "@quantum-l9/llm-router": "github:Quantum-L9/LLM-Router#main"
+  },
+  "engines": { "node": ">=20" }
+}
