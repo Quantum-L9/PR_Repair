@@ -183,6 +183,8 @@ class RepairExecution(BaseModel):
     push_result: str | None = None
     review_comment_payload: str | None = None
     status: str
+    false_positive_rules: list[str] = Field(default_factory=list)
+    retries_used: int = 0
 
 
 class LearningPacket(BaseModel):

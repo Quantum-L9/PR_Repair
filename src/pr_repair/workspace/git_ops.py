@@ -56,10 +56,21 @@ def push_changes(branch: str, repo_root: Path | None = None) -> None:
 
 def rollback_to_backup(ref_name: str, repo_root: Path | None = None) -> None:
     """
-    Hard-reset working tree to the backup ref created earlier.
+    Hard-reset working tree to the backup ref and remove untracked debris.
+
+    Verification failure must leave a perfectly clean tree: ``reset --hard``
+    restores tracked files to the backup state, and ``git clean -fd`` removes any
+    untracked files a bad patch created. No broken code can survive to be pushed.
     """
     root = repo_root or Path.cwd()
     _run_git(["reset", "--hard", ref_name], root)
+    clean_worktree(root)
+
+
+def clean_worktree(repo_root: Path | None = None) -> None:
+    """Remove untracked files and directories from the working tree."""
+    root = repo_root or Path.cwd()
+    _run_git(["clean", "-fd"], root)
 
 
 def _run_git(args: list[str], repo_root: Path) -> subprocess.CompletedProcess[str]:
