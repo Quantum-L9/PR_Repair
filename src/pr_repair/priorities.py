@@ -3,6 +3,7 @@ from __future__ import annotations
 from pr_repair.types import Severity, SourceName, TierLevel
 
 SOURCE_PRIORITY = {
+    SourceName.agent_review: 110,
     SourceName.coderabbit: 100,
     SourceName.codecov_cloud: 90,
     SourceName.github_checks: 80,

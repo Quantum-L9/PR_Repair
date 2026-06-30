@@ -1,0 +1,55 @@
+{
+  "artifact": "changed_files_manifest",
+  "phase": "phase_1_ingestion_purge_and_payload_wiring",
+  "objective": "Replace third-party scraping ingestion with deterministic agent_review_payload.json parsing.",
+  "approach": "scoped_ingestion_swap",
+  "created": [
+    "contracts/agent-review-payload.schema.json",
+    "src/pr_repair/ingestion/payload_parser.py",
+    "tests/unit/test_payload_parser.py"
+  ],
+  "modified": [
+    "pyproject.toml",
+    "src/pr_repair/cli.py",
+    "src/pr_repair/config.py",
+    "src/pr_repair/connectors/__init__.py",
+    "src/pr_repair/errors.py",
+    "src/pr_repair/ingestion/__init__.py",
+    "src/pr_repair/normalization/__init__.py",
+    "src/pr_repair/normalization/normalizer.py",
+    "src/pr_repair/output/artifact_writer.py",
+    "src/pr_repair/pipeline/__init__.py",
+    "src/pr_repair/pipeline/run_pipeline.py",
+    "src/pr_repair/priorities.py",
+    "src/pr_repair/types.py",
+    "tests/integration/test_flow_dry_to_plan.py",
+    "tests/integration/test_pipeline_full_modes.py"
+  ],
+  "deleted": [
+    "src/pr_repair/clustering.py",
+    "src/pr_repair/connectors/codecov_cloud.py",
+    "src/pr_repair/connectors/coderabbit.py",
+    "src/pr_repair/ingestion/comment_ingestor.py",
+    "src/pr_repair/ingestion/tool_finding_ingestor.py",
+    "src/pr_repair/normalization/deduper.py",
+    "tests/fixtures/codecov_findings.json",
+    "tests/fixtures/coderabbit_findings.json",
+    "tests/integration/test_pipeline_signal_order.py",
+    "tests/unit/test_clustering.py",
+    "tests/unit/test_deduper.py",
+    "tests/unit/test_ingestion_order.py"
+  ],
+  "validation": {
+    "pytest": "68 passed",
+    "compileall_src": "ok",
+    "ruff": "16 pre-existing errors, 0 introduced (unchanged from baseline)",
+    "mypy_strict": "56 pre-existing errors, 0 introduced (down from 66 baseline)",
+    "e2e_dry_run": "exit 0, artifacts written",
+    "e2e_missing_payload": "exit 2, fail-closed, no prs/ artifacts"
+  },
+  "known_gap": {
+    "structural_grep": "grep -r 'coderabbit' src/ returns 19 (not 0)",
+    "reason": "Residual references are legacy type-system/taxonomy values (SourceName enum, FindingBundle fields, category constants) in types.py, priorities.py, normalizer.py, artifact_writer.py, classifier.py, taxonomy.py.",
+    "followup": "Full tree-wide purge of these enum/category values cascades into ~10 test files and is a separate, reviewable change."
+  }
+}

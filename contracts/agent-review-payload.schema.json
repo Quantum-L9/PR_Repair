@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://l9.dev/contracts/agent-review-payload.schema.json",
+  "title": "Agent Review Payload",
+  "description": "Canonical, versioned contract emitted by the L9 Audit Bot and consumed by the Implementer Bot. Findings are pre-clustered and pre-deduplicated upstream; the Implementer Bot must not re-scrape third-party tools.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pr", "autofix_candidates", "manual_review_required"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of the payload contract."
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "Optional ISO-8601 timestamp of payload generation."
+    },
+    "pr": { "$ref": "#/$defs/pr" },
+    "autofix_candidates": {
+      "type": "array",
+      "description": "Deterministic AST fixes (e.g. Semgrep) that bypass the LLM.",
+      "items": { "$ref": "#/$defs/autofix_finding" }
+    },
+    "manual_review_required": {
+      "type": "array",
+      "description": "Complex findings routed to the LLM-assisted repair planner.",
+      "items": { "$ref": "#/$defs/manual_finding" }
+    }
+  },
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_owner",
+        "repo_name",
+        "pr_number",
+        "title",
+        "head_branch",
+        "base_branch",
+        "head_sha",
+        "author"
+      ],
+      "properties": {
+        "repo_owner": { "type": "string", "minLength": 1 },
+        "repo_name": { "type": "string", "minLength": 1 },
+        "pr_number": { "type": "integer", "minimum": 1 },
+        "title": { "type": "string" },
+        "head_branch": { "type": "string", "minLength": 1 },
+        "base_branch": { "type": "string", "minLength": 1 },
+        "head_sha": { "type": "string", "minLength": 1 },
+        "is_draft": { "type": "boolean" },
+        "author": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "changed_files": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "autofix_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "category",
+        "severity",
+        "message",
+        "file_path",
+        "line_start",
+        "line_end",
+        "replacement_text"
+      ],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "severity": { "$ref": "#/$defs/severity" },
+        "message": { "type": "string", "minLength": 1 },
+        "file_path": { "type": "string", "minLength": 1 },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "replacement_text": { "type": "string" },
+        "rule_id": { "type": "string" },
+        "evidence_url": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    },
+    "manual_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "category", "severity", "message"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "severity": { "$ref": "#/$defs/severity" },
+        "message": { "type": "string", "minLength": 1 },
+        "file_path": { "type": ["string", "null"] },
+        "line_start": { "type": ["integer", "null"], "minimum": 1 },
+        "line_end": { "type": ["integer", "null"], "minimum": 1 },
+        "suggested_fix": { "type": ["string", "null"] },
+        "rule_id": { "type": "string" },
+        "evidence_url": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    }
+  }
+}

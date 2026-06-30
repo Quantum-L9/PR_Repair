@@ -1,6 +1,5 @@
 from pr_repair.classification.classifier import classify_findings
 from pr_repair.config import AppConfig
-from pr_repair.normalization.deduper import dedupe_findings
 from pr_repair.normalization.normalizer import normalize_bundle
 from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.types import (
@@ -66,8 +65,7 @@ def test_flow_dry_to_plan_produces_safe_t1_plan(tmp_path) -> None:
 
     normalized = normalize_bundle(bundle)
     merged = normalized.coderabbit_findings
-    deduped = dedupe_findings(merged)
-    classified = classify_findings(deduped, repo_context)
+    classified = classify_findings(merged, repo_context)
     plan = build_repair_plan(pr, classified, config)
 
     assert plan.target_tier is TierLevel.t1

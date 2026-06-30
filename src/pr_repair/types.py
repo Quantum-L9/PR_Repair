@@ -31,11 +31,19 @@ class ExecutionMode(str, Enum):
 
 
 class SourceName(str, Enum):
+    agent_review = "agent_review"
     coderabbit = "coderabbit"
     codecov_cloud = "codecov_cloud"
     github_checks = "github_checks"
     github_review_comments = "github_review_comments"
     github_issue_comments = "github_issue_comments"
+
+
+class ReviewDisposition(str, Enum):
+    """How the upstream agent review routed a finding."""
+
+    autofix = "autofix"
+    manual_review = "manual_review"
 
 
 class TierLevel(str, Enum):
@@ -84,6 +92,9 @@ class Finding(BaseModel):
     line_start: int | None = None
     line_end: int | None = None
     suggested_fix: str | None = None
+    replacement_text: str | None = None
+    rule_id: str | None = None
+    review_disposition: ReviewDisposition | None = None
     evidence_url: str | None = None
     repairable: bool = False
     confidence: float = 0.0
@@ -132,6 +143,7 @@ class NormalizationError(BaseModel):
 
 class FindingBundle(BaseModel):
     pr_ref: PRRef
+    agent_review_findings: list[Finding] = Field(default_factory=list)
     coderabbit_findings: list[Finding] = Field(default_factory=list)
     codecov_findings: list[Finding] = Field(default_factory=list)
     github_check_findings: list[Finding] = Field(default_factory=list)
