@@ -18,7 +18,7 @@ from pr_repair.classification.taxonomy import (
     NEVER_AUTO_REPAIR_CATEGORIES,
 )
 from pr_repair.repo_context.rules import classify_path_tier, is_protected_path, is_skip_review_path
-from pr_repair.types import Finding, RepoContext, TierLevel
+from pr_repair.types import Finding, RepoContext, ReviewDisposition, TierLevel
 
 
 def classify_finding(finding: Finding, repo_context: RepoContext) -> Finding:
@@ -40,6 +40,12 @@ def classify_finding(finding: Finding, repo_context: RepoContext) -> Finding:
         category = "architecture_boundary_violation"
 
     repairable = category in AUTO_REPAIRABLE_CATEGORIES and not protected_path
+    # A finding the upstream Audit Bot deterministically routed to autofix carries
+    # an exact Semgrep replacement; that disposition is authoritative for
+    # repairability and bypasses category-based gating -- UNLESS a hard safety gate
+    # fires (protected path or a never-auto-repair category).
+    if finding.review_disposition is ReviewDisposition.autofix and not protected_path:
+        repairable = True
     if category in NEVER_AUTO_REPAIR_CATEGORIES:
         repairable = False
     contract_ids = list(CATEGORY_TO_CONTRACT_IDS.get(category, []))

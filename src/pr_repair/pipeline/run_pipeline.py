@@ -20,6 +20,7 @@ from pr_repair.learning.agent_md_recommender import build_agent_md_recommendatio
 from pr_repair.learning.pattern_extractor import extract_learning_packets
 from pr_repair.learning.validator_recommender import build_validator_recommendations
 from pr_repair.logging import configure_logging, log_event
+from pr_repair.orchestration.router import route_findings
 from pr_repair.output.artifact_writer import (
     write_learning_artifacts,
     write_pr_artifacts,
@@ -80,6 +81,16 @@ def run_pipeline(config: AppConfig) -> int:
     findings = parsed.findings
     classified_findings = classify_findings(findings, repo_context)
     bundle = bundle.model_copy(update={"merged_findings": findings})
+
+    # Bifurcate: deterministic autofix candidates bypass the LLM planner; complex
+    # findings are reserved for LLM-assisted manual review.
+    route = route_findings(classified_findings)
+    log_event(
+        "pipeline_routing",
+        pr_number=pr.pr_number,
+        autofix=len(route.autofix),
+        manual=len(route.manual),
+    )
 
     plan = build_repair_plan(pr, classified_findings, config)
 
