@@ -97,6 +97,47 @@ def test_run_pipeline_repair_mode_writes_execution_and_learning_artifacts(monkey
     assert "autofix_telemetry_emitted" in events
 
 
+def test_high_severity_manual_finding_does_not_gate_autofix(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    payload_path = tmp_path / "agent_review_payload.json"
+    # _write_payload includes a medium-severity lint_failure autofix candidate AND a
+    # high-severity architecture_boundary_violation manual finding.
+    _write_payload(payload_path, pr_number=55)
+
+    config = AppConfig(
+        github_token="token",
+        github_repository="owner/repo",
+        payload_path=payload_path,
+        verify_command=["python", "-c", "print('ok')"],
+        mode=ExecutionMode.repair_and_verify,
+        output_dir=tmp_path / "runtime",
+        write_ceiling=TierLevel.t1,
+    )
+
+    captured = {}
+
+    def capture(plan, cfg, repo_root=None):
+        captured["plan"] = plan
+        return RepairExecution(
+            execution_id="exec-55", pr_ref=plan.pr_ref, plan_id=plan.plan_id,
+            mode=plan.execution_mode, status="completed",
+        )
+
+    monkeypatch.setattr("pr_repair.pipeline.run_pipeline.execute_repair_plan", capture)
+
+    assert run_pipeline(config) == 0
+
+    plan = captured["plan"]
+    # The plan covers only the deterministic autofix lane...
+    assert [f.finding_id for f in plan.targeted_findings] == ["af-55"]
+    # ...so the high-severity manual finding does NOT gate it.
+    assert plan.executable is True
+    assert plan.approval_required is False
+    assert plan.risk_level == "low"
+
+
 def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)

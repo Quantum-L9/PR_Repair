@@ -132,7 +132,11 @@ def _run_pipeline_traced(
             [proposal.model_dump(mode="json") for proposal in proposals],
         )
 
-    plan = build_repair_plan(pr, classified_findings, config)
+    # The execution plan covers ONLY the deterministic autofix lane. Manual-review
+    # findings are handled by the proposal lane (above) and must not raise the
+    # plan's risk/approval gate -- a high-severity architectural finding in the PR
+    # cannot block an unrelated, deterministic Semgrep autofix.
+    plan = build_repair_plan(pr, route.autofix, config)
 
     execution: RepairExecution | None = None
     needs_approval = requires_human_approval(plan, config)
