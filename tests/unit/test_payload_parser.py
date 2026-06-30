@@ -191,3 +191,21 @@ def test_parse_payload_convenience_wrapper(tmp_path: Path) -> None:
     parsed = parse_payload(path)
 
     assert parsed.pr_ref.pr_number == 42
+
+
+def test_corrupt_schema_fails_closed(tmp_path: Path) -> None:
+    payload_path = _write(tmp_path, _valid_payload())
+    bad_schema = tmp_path / "schema.json"
+    bad_schema.write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(PayloadIngestionError, match="schema .* is not valid JSON"):
+        PayloadParser(payload_path, schema_path=bad_schema).parse()
+
+
+def test_non_object_schema_fails_closed(tmp_path: Path) -> None:
+    payload_path = _write(tmp_path, _valid_payload())
+    bad_schema = tmp_path / "schema.json"
+    bad_schema.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(PayloadIngestionError, match="schema .* must be a JSON object"):
+        PayloadParser(payload_path, schema_path=bad_schema).parse()

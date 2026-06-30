@@ -82,6 +82,29 @@ def test_autofix_replacement_text_takes_precedence_over_suggested_fix(tmp_path: 
     ]
 
 
+def test_autofix_multiline_skips_when_file_unreadable(tmp_path: Path) -> None:
+    # File does not exist -> the on-disk block guard cannot be captured, so no
+    # guard-less range patch is emitted.
+    finding = Finding(
+        finding_id="af-missing",
+        pr_number=1,
+        source_name=SourceName.agent_review,
+        source_priority=110,
+        severity=Severity.medium,
+        category="lint_failure",
+        message="span",
+        file_path="does_not_exist.py",
+        line_start=2,
+        line_end=3,
+        replacement_text="y1\ny2",
+        review_disposition=ReviewDisposition.autofix,
+        repairable=True,
+        fingerprint="fp-af-missing",
+    )
+
+    assert generate_patch_instructions(_plan([finding]), tmp_path) == []
+
+
 def test_autofix_multiline_emits_replace_range_with_block_guard(tmp_path: Path) -> None:
     (tmp_path / "m.py").write_text("h\nx1\nx2\nt\n", encoding="utf-8")
     finding = Finding(

@@ -70,13 +70,17 @@ def _build_autofix_instruction(finding: Finding, lines: list[str] | None) -> dic
             "category": finding.category,
         }
 
-    expected_block = lines[line_start - 1 : line_end] if lines is not None else None
+    # A multi-line replacement must carry an exact on-disk block guard. If the file
+    # was not readable at generation time we cannot capture it, so we skip the patch
+    # rather than emit a guard-less range edit (no fuzzy matching, ever).
+    if lines is None:
+        return None
     return {
         "op": "replace_range",
         "file_path": finding.file_path,
         "line_start": line_start,
         "line_end": line_end,
-        "expected_block": expected_block,
+        "expected_block": lines[line_start - 1 : line_end],
         "replacement": finding.replacement_text,
         "finding_id": finding.finding_id,
         "rule_id": finding.rule_id,

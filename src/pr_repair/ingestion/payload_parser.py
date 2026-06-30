@@ -128,7 +128,14 @@ class PayloadParser:
         except OSError as exc:
             msg = f"unable to read payload schema at {self.schema_path}: {exc}"
             raise PayloadIngestionError(msg) from exc
-        loaded: dict[str, Any] = json.loads(schema_text)
+        try:
+            loaded = json.loads(schema_text)
+        except json.JSONDecodeError as exc:
+            msg = f"payload schema at {self.schema_path} is not valid JSON: {exc}"
+            raise PayloadIngestionError(msg) from exc
+        if not isinstance(loaded, dict):
+            msg = f"payload schema at {self.schema_path} must be a JSON object"
+            raise PayloadIngestionError(msg)
         return loaded
 
     def _validate(self, raw: dict[str, Any]) -> None:
