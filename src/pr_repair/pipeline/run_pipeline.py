@@ -28,13 +28,13 @@ from pr_repair.output.artifact_writer import (
     write_pr_artifacts,
     write_run_artifacts,
 )
-from pr_repair.output.pr_commentary import build_pr_comment
+from pr_repair.output.pr_commentary import build_pr_comment, upsert_implementer_comment
 from pr_repair.planning.approval_gate import requires_human_approval
 from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.repo_context.loader import load_repo_context
 from pr_repair.runtime import RuntimeManager
 from pr_repair.state_store import StateStore
-from pr_repair.types import ExecutionMode, RepairExecution
+from pr_repair.types import ExecutionMode, PRRef, RepairExecution
 from pr_repair.repair.repair_executor import execute_repair_plan
 
 
@@ -128,7 +128,11 @@ def run_pipeline(config: AppConfig) -> int:
     if execution is not None:
         executions.append(execution)
 
-    pr_comment = build_pr_comment(execution or _planned_execution_stub(plan), classified_findings)
+    pr_comment = build_pr_comment(
+        execution or _planned_execution_stub(plan), classified_findings, proposals
+    )
+    if config.post_comment:
+        _post_implementer_comment(config, pr, pr_comment)
     report = write_pr_artifacts(
         store=store,
         bundle=bundle,
@@ -162,6 +166,18 @@ def run_pipeline(config: AppConfig) -> int:
 
     runtime_manager.complete(run_state)
     return 0
+
+
+def _post_implementer_comment(config: AppConfig, pr: PRRef, body: str) -> None:
+    """Post/refresh the single marker-keyed Implementer Bot comment on the PR."""
+    from pr_repair.connectors.github import GitHubConnector
+
+    try:
+        connector = GitHubConnector(config.github_token)
+        upsert_implementer_comment(connector, pr, body)
+        log_event("implementer_comment_upserted", pr_number=pr.pr_number)
+    except Exception as exc:  # posting must never break the local repair pipeline
+        log_event("implementer_comment_failed", pr_number=pr.pr_number, error=str(exc))
 
 
 def _planned_execution_stub(plan) -> RepairExecution:

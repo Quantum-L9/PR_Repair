@@ -1,32 +1,38 @@
-from pr_repair.output.pr_commentary import build_pr_comment
-from pr_repair.types import ExecutionMode, Finding, PRRef, RepairExecution, Severity, SourceName
+from pr_repair.llm.contract import ProposedPatch
+from pr_repair.output.pr_commentary import MARKER, build_pr_comment, upsert_implementer_comment
+from pr_repair.types import (
+    ExecutionMode,
+    Finding,
+    PRRef,
+    RepairExecution,
+    ReviewDisposition,
+    Severity,
+    SourceName,
+    VerificationReport,
+)
 
 
-def test_build_pr_comment_uses_contract_template_for_violation() -> None:
-    pr = PRRef(
+def _pr(pr_number: int = 61) -> PRRef:
+    return PRRef(
         repo_owner="owner",
         repo_name="repo",
-        pr_number=61,
+        pr_number=pr_number,
         title="repair",
         head_branch="fix/repair",
         base_branch="main",
-        head_sha="sha-61",
+        head_sha=f"sha-{pr_number}",
         is_draft=False,
         author="dev",
         labels=[],
     )
-    execution = RepairExecution(
-        execution_id="exec-61",
-        pr_ref=pr,
-        plan_id="plan-61",
-        mode=ExecutionMode.dry_run,
-        status="approval_required",
-    )
-    finding = Finding(
+
+
+def _finding(**overrides) -> Finding:
+    base = dict(
         finding_id="f-61",
         pr_number=61,
         source_name=SourceName.agent_review,
-        source_priority=100,
+        source_priority=110,
         severity=Severity.high,
         category="architecture_boundary_violation",
         message="from fastapi import FastAPI in engine module",
@@ -39,8 +45,109 @@ def test_build_pr_comment_uses_contract_template_for_violation() -> None:
         contract_ids=["C-01"],
         repo_rule_sources=["AGENT.md", "AI_AGENT_REVIEW_CHECKLIST.md"],
     )
+    base.update(overrides)
+    return Finding(**base)
 
-    comment = build_pr_comment(execution, [finding])
+
+def test_comment_carries_marker_and_table_header() -> None:
+    execution = RepairExecution(
+        execution_id="exec-61", pr_ref=_pr(), plan_id="plan-61",
+        mode=ExecutionMode.dry_run, status="approval_required",
+    )
+    comment = build_pr_comment(execution, [_finding(review_disposition=ReviewDisposition.manual_review)])
+
+    assert comment.startswith(MARKER)
+    assert "| Finding | Source | Patch Applied | Verification Status |" in comment
+    assert "`f-61` architecture_boundary_violation" in comment
+
+
+def test_comment_preserves_contract_violation_details() -> None:
+    execution = RepairExecution(
+        execution_id="exec-61", pr_ref=_pr(), plan_id="plan-61",
+        mode=ExecutionMode.dry_run, status="approval_required",
+    )
+    comment = build_pr_comment(execution, [_finding()])
 
     assert "CONTRACT C-01 VIOLATION" in comment
     assert "File: engine/module.py Line: 8" in comment
+
+
+def test_table_reflects_applied_autofix_and_passing_verification() -> None:
+    execution = RepairExecution(
+        execution_id="exec-7", pr_ref=_pr(7), plan_id="plan-7",
+        mode=ExecutionMode.repair_and_verify, status="completed",
+        modified_files=["engine/module.py"],
+        verification_result=VerificationReport(
+            command=["pytest"], success=True, exit_code=0, stdout="", stderr=""
+        ),
+    )
+    finding = _finding(
+        category="lint_failure", contract_ids=[], review_disposition=ReviewDisposition.autofix
+    )
+    comment = build_pr_comment(execution, [finding])
+
+    assert "✅ applied" in comment
+    assert "✅ passing" in comment
+
+
+def test_table_reflects_manual_proposal() -> None:
+    execution = RepairExecution(
+        execution_id="exec-9", pr_ref=_pr(9), plan_id="plan-9",
+        mode=ExecutionMode.dry_run, status="planned_only",
+    )
+    finding = _finding(contract_ids=[], review_disposition=ReviewDisposition.manual_review)
+    proposal = ProposedPatch(finding_id="f-61", file_path="engine/module.py", abstained=False)
+    comment = build_pr_comment(execution, [finding], [proposal])
+
+    assert "📝 proposed" in comment
+
+
+class _FakeConnector:
+    def __init__(self, existing):
+        self._existing = existing
+        self.posted = []
+        self.updated = []
+
+    def get_issue_comments(self, owner, repo, pr_number):
+        return self._existing
+
+    def post_pr_comment(self, owner, repo, pr_number, body):
+        self.posted.append(body)
+        return {"id": 999, "body": body}
+
+    def update_issue_comment(self, owner, repo, comment_id, body):
+        self.updated.append((comment_id, body))
+        return {"id": comment_id, "body": body}
+
+
+def test_upsert_creates_when_no_marker_present() -> None:
+    connector = _FakeConnector(existing=[{"id": 1, "body": "unrelated human comment"}])
+    body = f"{MARKER}\nbody"
+    upsert_implementer_comment(connector, _pr(), body)
+
+    assert connector.posted == [body]
+    assert connector.updated == []
+
+
+def test_upsert_updates_existing_marked_comment() -> None:
+    connector = _FakeConnector(
+        existing=[
+            {"id": 1, "body": "human comment"},
+            {"id": 42, "body": f"{MARKER}\nold table"},
+        ]
+    )
+    body = f"{MARKER}\nnew table"
+    upsert_implementer_comment(connector, _pr(), body)
+
+    assert connector.updated == [(42, body)]
+    assert connector.posted == []
+
+
+def test_upsert_rejects_body_without_marker() -> None:
+    connector = _FakeConnector(existing=[])
+    try:
+        upsert_implementer_comment(connector, _pr(), "no marker here")
+    except ValueError as exc:
+        assert "marker" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing marker")

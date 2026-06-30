@@ -24,6 +24,7 @@ class AppConfig(BaseModel):
     github_token: str
     github_repository: str
     payload_path: Path = Path("artifacts/agent_review_payload.json")
+    post_comment: bool = False
     llm_enabled: bool = False
     llm_client_id: str = "implementer-bot"
     llm_shim_path: Path = Path("router-shim/shim.mjs")
@@ -91,6 +92,7 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
         payload_path=Path(
             os.getenv("PR_FIX_PAYLOAD_PATH", "artifacts/agent_review_payload.json")
         ),
+        post_comment=os.getenv("PR_FIX_POST_COMMENT", "0") == "1",
         llm_enabled=os.getenv("PR_FIX_LLM_ENABLED", "0") == "1",
         llm_client_id=os.getenv("PR_FIX_LLM_CLIENT_ID", "implementer-bot"),
         llm_shim_path=Path(os.getenv("PR_FIX_LLM_SHIM_PATH", "router-shim/shim.mjs")),

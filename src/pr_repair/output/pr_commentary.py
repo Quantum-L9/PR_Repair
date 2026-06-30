@@ -3,44 +3,146 @@
 # origin: pr_repair_pipeline
 # engine: pr_repair
 # layer: [output]
-# tags: [commentary, pr, review-template]
+# tags: [commentary, pr, trio-governance, marker]
 # owner: platform
 # status: active
 # --- /L9_META ---
 
+"""Trio Governance PR output contract.
+
+Every Implementer Bot comment is keyed on a single persistent marker and renders
+a fixed four-column status table so the constellation's other bots (Audit,
+Validator) never collide with it. The bot maintains exactly ONE comment per PR
+via update-or-create.
+"""
+
 from __future__ import annotations
 
-from pr_repair.types import Finding, RepairExecution
+from typing import Protocol
+
+from pr_repair.llm.contract import ProposedPatch
+from pr_repair.types import Finding, PRRef, RepairExecution, ReviewDisposition
+
+MARKER = "<!-- L9:IMPLEMENTER_BOT -->"
+_TABLE_HEADER = "| Finding | Source | Patch Applied | Verification Status |"
+_TABLE_DIVIDER = "| --- | --- | --- | --- |"
 
 
-def build_pr_comment(execution: RepairExecution, findings: list[Finding] | None = None) -> str:
-    """
-    Build repo-aligned PR commentary.
+class _CommentConnector(Protocol):
+    def get_issue_comments(
+        self, repo_owner: str, repo_name: str, pr_number: int
+    ) -> list[dict[str, object]]: ...
 
-    Rules:
-    - contract-tagged findings use structured contract violation format
-    - clean executions use a concise status summary
-    - output is review-safe and can be posted later by an integration layer
+    def post_pr_comment(
+        self, repo_owner: str, repo_name: str, pr_number: int, body: str
+    ) -> dict[str, object]: ...
+
+    def update_issue_comment(
+        self, repo_owner: str, repo_name: str, comment_id: int, body: str
+    ) -> dict[str, object]: ...
+
+
+def build_pr_comment(
+    execution: RepairExecution,
+    findings: list[Finding] | None = None,
+    proposals: list[ProposedPatch] | None = None,
+) -> str:
+    """Render the single Trio Governance status comment.
+
+    Always carries the persistent marker, a four-column status table, and a
+    details section for contract-tagged findings.
     """
     findings = findings or []
-    violation_blocks = [block for finding in findings for block in [_build_violation_block(finding)] if block]
-    if violation_blocks:
-        return "\n\n".join(violation_blocks)
+    proposals_by_id = {p.finding_id: p for p in (proposals or [])}
+    verification = _verification_summary(execution)
 
-    verification_summary = "not-run"
-    if execution.verification_result is not None:
-        verification_summary = (
-            "confirmed passing"
-            if execution.verification_result.success
-            else f"failed exit_code={execution.verification_result.exit_code}"
-        )
+    lines = [
+        MARKER,
+        "## L9 Implementer Bot",
+        "",
+        f"Status: `{execution.status}` · Verification: {verification}",
+        "",
+        _TABLE_HEADER,
+        _TABLE_DIVIDER,
+    ]
+    if findings:
+        for finding in findings:
+            lines.append(_table_row(finding, execution, proposals_by_id.get(finding.finding_id)))
+    else:
+        lines.append("| _no findings_ | — | — | — |")
 
-    return (
-        f"PR repair execution summary\n"
-        f"Status: {execution.status}\n"
-        f"Tier assessment: T1-T2 safe execution path only\n"
-        f"make agent-check gates: {verification_summary}\n"
-    )
+    detail_blocks = [block for finding in findings for block in [_build_violation_block(finding)] if block]
+    if detail_blocks:
+        lines.extend(["", "### Contract violations", ""])
+        lines.extend(detail_blocks)
+
+    return "\n".join(lines) + "\n"
+
+
+def upsert_implementer_comment(
+    connector: _CommentConnector, pr: PRRef, body: str
+) -> dict[str, object]:
+    """Maintain exactly one marker-keyed comment per PR: update if present, else create."""
+    if MARKER not in body:
+        msg = "implementer comment body is missing the L9 marker"
+        raise ValueError(msg)
+
+    existing = connector.get_issue_comments(pr.repo_owner, pr.repo_name, pr.pr_number)
+    for comment in existing:
+        comment_body = comment.get("body")
+        if isinstance(comment_body, str) and MARKER in comment_body:
+            comment_id = comment.get("id")
+            if isinstance(comment_id, int):
+                return connector.update_issue_comment(
+                    pr.repo_owner, pr.repo_name, comment_id, body
+                )
+    return connector.post_pr_comment(pr.repo_owner, pr.repo_name, pr.pr_number, body)
+
+
+def _table_row(
+    finding: Finding, execution: RepairExecution, proposal: ProposedPatch | None
+) -> str:
+    name = f"`{finding.finding_id}` {finding.category}"
+    source = _source_label(finding)
+    patch = _patch_status(finding, execution, proposal)
+    verification = _verification_summary(execution)
+    return f"| {name} | {source} | {patch} | {verification} |"
+
+
+def _source_label(finding: Finding) -> str:
+    if finding.review_disposition is ReviewDisposition.autofix:
+        return "agent_review · autofix"
+    if finding.review_disposition is ReviewDisposition.manual_review:
+        return "agent_review · manual"
+    return finding.source_name.value
+
+
+def _patch_status(
+    finding: Finding, execution: RepairExecution, proposal: ProposedPatch | None
+) -> str:
+    if finding.review_disposition is ReviewDisposition.autofix:
+        if execution.status == "completed" and finding.file_path in execution.modified_files:
+            return "✅ applied"
+        if execution.status == "rolled_back_verification_failed":
+            return "↩️ rolled back"
+        if execution.status in {"approval_required", "planned_only"}:
+            return "⏳ planned"
+        return "—"
+    if finding.review_disposition is ReviewDisposition.manual_review:
+        if proposal is None:
+            return "👤 manual review"
+        if proposal.abstained:
+            return "👤 manual review (no proposal)"
+        return "📝 proposed"
+    return "—"
+
+
+def _verification_summary(execution: RepairExecution) -> str:
+    if execution.verification_result is None:
+        return "not run"
+    if execution.verification_result.success:
+        return "✅ passing"
+    return f"❌ failed (exit {execution.verification_result.exit_code})"
 
 
 def _build_violation_block(finding: Finding) -> str | None:
@@ -50,10 +152,11 @@ def _build_violation_block(finding: Finding) -> str | None:
     line = finding.line_start if finding.line_start is not None else "unknown"
     path = finding.file_path or "<repo-wide>"
     required = finding.suggested_fix or "manual review required"
+    evidence = ", ".join(finding.repo_rule_sources) if finding.repo_rule_sources else "repo governance context"
     return (
         f"CONTRACT {contract_id} VIOLATION — {finding.category}\n"
         f"File: {path} Line: {line}\n"
         f"Found: {finding.message}\n"
         f"Required: {required}\n"
-        f"Evidence: {', '.join(finding.repo_rule_sources) if finding.repo_rule_sources else 'repo governance context'}"
+        f"Evidence: {evidence}"
     )
