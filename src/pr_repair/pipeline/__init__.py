@@ -15,6 +15,8 @@ from pr_repair.pipeline import run_pipeline as _run_pipeline_module
 _ORCHESTRATION_SEAMS = (
     "PayloadParser",
     "execute_repair_plan",
+    "propose_repairs",
+    "apply_llm_proposals",
 )
 
 
