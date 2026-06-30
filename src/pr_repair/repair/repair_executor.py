@@ -61,9 +61,22 @@ def execute_repair_plan(
             )
 
         modified_files = apply_patch_instructions(instructions, root)
+        log_event(
+            "patch_applied",
+            pr_number=plan.pr_ref.pr_number,
+            instructions=len(instructions),
+            modified_files=modified_files,
+        )
         verification_result = run_verification(plan.verification_command, root)
+        log_event(
+            "verification_complete",
+            pr_number=plan.pr_ref.pr_number,
+            success=verification_result.success,
+            exit_code=verification_result.exit_code,
+        )
         if not verification_result.success:
             rollback_to_backup(backup_ref, root)
+            log_event("repair_rolled_back", pr_number=plan.pr_ref.pr_number, reason="verification_failed")
             # Deterministic autofixes must never break verification. If they do,
             # the Semgrep rule is a false-positive candidate: flag it for the CI
             # platform and fail immediately -- no LLM, no retry.
@@ -107,6 +120,7 @@ def execute_repair_plan(
         )
     except Exception:
         rollback_to_backup(backup_ref, root)
+        log_event("repair_rolled_back", pr_number=plan.pr_ref.pr_number, reason="exception")
         raise
 
 

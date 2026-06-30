@@ -86,6 +86,15 @@ def test_run_pipeline_repair_mode_writes_execution_and_learning_artifacts(monkey
     assert (tmp_path / "runtime" / "repair_plans.yaml").exists()
     assert (tmp_path / "runtime" / "learning_report.md").exists()
     assert (tmp_path / "runtime" / "prs" / "pr_11" / "repair_plan.json").exists()
+    # W6: telemetry + trace artifacts
+    assert (tmp_path / "runtime" / "prs" / "pr_11" / "autofix_telemetry.json").exists()
+    trace_path = tmp_path / "runtime" / "run_trace.json"
+    assert trace_path.exists()
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    events = [entry["event"] for entry in trace]
+    assert "payload_ingested" in events
+    assert "pipeline_routing" in events
+    assert "autofix_telemetry_emitted" in events
 
 
 def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypatch) -> None:
@@ -107,3 +116,8 @@ def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypa
     assert result == 2
     # Fail-closed: no per-PR repair artifacts are written.
     assert not (tmp_path / "runtime" / "prs").exists()
+    # ...but the run trace is still emitted, capturing the failure.
+    trace_path = tmp_path / "runtime" / "run_trace.json"
+    assert trace_path.exists()
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert "payload_ingestion_failed" in [entry["event"] for entry in trace]

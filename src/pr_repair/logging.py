@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 
 _LOGGER_NAME = "pr_repair"
+
+# Decoupled fan-out for structured events. Sinks (e.g. the trace recorder) register
+# here so they receive every log_event without logging.py depending on them.
+EventSink = Callable[[str, dict[str, Any]], None]
+_EVENT_SINKS: list[EventSink] = []
+
+
+def add_event_sink(sink: EventSink) -> None:
+    _EVENT_SINKS.append(sink)
+
+
+def remove_event_sink(sink: EventSink) -> None:
+    if sink in _EVENT_SINKS:
+        _EVENT_SINKS.remove(sink)
 
 
 def configure_logging(level: str = "INFO") -> logging.Logger:
@@ -45,3 +60,8 @@ def log_event(event: str, **fields: Any) -> None:
     logger = get_logger()
     payload = " ".join(f"{key}={value!r}" for key, value in sorted(fields.items()))
     logger.info("%s %s", event, payload)
+    for sink in list(_EVENT_SINKS):
+        try:
+            sink(event, fields)
+        except Exception:  # a sink must never break the pipeline's logging
+            logger.exception("event sink failed for %s", event)
