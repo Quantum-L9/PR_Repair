@@ -50,9 +50,11 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+import requests
 
 from pr_repair.connectors.github import GitHubConnector
 from pr_repair.ingestion.payload_parser import SCHEMA_PATH
+from pr_repair.ingestion.pr_collector import load_changed_filenames
 from pr_repair.server.github_webhook import detect_tool
 from pr_repair.tools.registry import adapter_for_tool
 from pr_repair.types import PRRef
@@ -65,6 +67,25 @@ PAYLOAD_SCHEMA_VERSION = "1.0.0"
 EXIT_PRODUCED = 0
 EXIT_FAILED = 1
 EXIT_SKIPPED = 3
+
+# Per-tool enable gate. Mirrors config.AppConfig's PR_FIX_TOOL_* env + defaults
+# (copilot on; the rest off until their live shapes are confirmed for a repo).
+# A detected-but-not-enabled tool is a clean skip, never an actuation.
+_TOOL_ENV: dict[str, tuple[str, str]] = {
+    "copilot": ("PR_FIX_TOOL_COPILOT", "1"),
+    "coderabbit": ("PR_FIX_TOOL_CODERABBIT", "0"),
+    "sonarcloud": ("PR_FIX_TOOL_SONARCLOUD", "0"),
+    "gitguardian": ("PR_FIX_TOOL_GITGUARDIAN", "0"),
+}
+
+
+def enabled_tools_from_env() -> set[str]:
+    """Resolve the enabled tool set from PR_FIX_TOOL_* env (config parity)."""
+    return {
+        name
+        for name, (var, default) in _TOOL_ENV.items()
+        if os.getenv(var, default) == "1"
+    }
 
 # Schema-allowed keys, mirroring contracts/agent-review-payload.schema.json
 # (``additionalProperties: false`` there means we must project, not pass through).
@@ -193,13 +214,19 @@ def collect_payload(
     connector: Any,
     *,
     event_name: str = "pull_request_review",
+    enabled: set[str] | None = None,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     """Normalize a live GitHub Actions review event into a payload.
 
-    Raises :class:`ReviewSkipped` when the event carries no PR or no recognized
-    review tool (a clean skip), and :class:`ReviewIngestError` when a tool *is*
-    recognized but its data cannot be normalized (fail closed).
+    ``enabled`` gates which tools may actuate; a detected-but-not-enabled tool
+    is a clean skip (never a partial/incorrect actuation). ``None`` means allow
+    any registered adapter.
+
+    Raises :class:`ReviewSkipped` when the event carries no PR, no recognized
+    review tool, or the tool is not enabled (all clean skips), and
+    :class:`ReviewIngestError` when a tool *is* actionable but its data cannot be
+    normalized (fail closed).
     """
     if not isinstance(event, dict):
         raise ReviewIngestError("event payload must be a JSON object")
@@ -210,7 +237,9 @@ def collect_payload(
     tool = detect_tool(event_name, event)
     if tool is None:
         raise ReviewSkipped("no recognized review tool attributed to this event")
-    adapter = adapter_for_tool(tool)
+    if enabled is not None and tool not in enabled:
+        raise ReviewSkipped(f"tool '{tool}' detected but not enabled")
+    adapter = adapter_for_tool(tool, enabled)
     if adapter is None:
         raise ReviewSkipped(f"no adapter registered for tool '{tool}'")
 
@@ -218,7 +247,31 @@ def collect_payload(
     pr_ref = _pr_ref_for_read(pr_block)
     raw = adapter.read_findings(pr_ref, connector)
     findings = adapter.to_payload_findings(raw)
+
+    # changed_files is optional enrichment (schema-optional; only feeds the
+    # downstream prioritization score). Fetch it best-effort: a transient files
+    # API error degrades to [] rather than failing an otherwise-valid ingest.
+    # The core review-thread fetch above keeps its fail-closed behavior.
+    changed_files = _changed_files_best_effort(
+        connector, pr_ref.repo_owner, pr_ref.repo_name, pr_ref.pr_number
+    )
+    if changed_files:
+        pr_block["changed_files"] = changed_files
     return build_payload(pr_block, findings, generated_at=generated_at)
+
+
+def _changed_files_best_effort(
+    connector: Any, repo_owner: str, repo_name: str, pr_number: int
+) -> list[str]:
+    try:
+        return load_changed_filenames(connector, repo_owner, repo_name, pr_number)
+    except requests.RequestException as exc:
+        print(
+            f"[ingest-review] notice: could not fetch changed files ({exc}); "
+            "proceeding with none",
+            file=sys.stderr,
+        )
+        return []
 
 
 def _pr_block_from_event(event: dict[str, Any], pr: dict[str, Any]) -> dict[str, Any]:
@@ -301,6 +354,7 @@ def run(
     context: str | None = None,
     event_path: str | None = None,
     event_name: str = "pull_request_review",
+    enabled_tools: set[str] | None = None,
     generated_at: str | None = None,
     connector_factory: Callable[[str], Any] = GitHubConnector,
 ) -> int:
@@ -321,8 +375,10 @@ def run(
             if not token:
                 raise ReviewIngestError("GITHUB_TOKEN is required for live (--event-path) ingestion")
             connector = connector_factory(token)
+            enabled = enabled_tools if enabled_tools is not None else enabled_tools_from_env()
             payload = collect_payload(
-                event, connector, event_name=event_name, generated_at=generated_at
+                event, connector, event_name=event_name, enabled=enabled,
+                generated_at=generated_at,
             )
         else:
             raise ReviewIngestError("one of --context or --event-path is required")
@@ -365,16 +421,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.getenv("GITHUB_EVENT_NAME", "pull_request_review"),
         help="GitHub event name (default: $GITHUB_EVENT_NAME or pull_request_review).",
     )
+    parser.add_argument(
+        "--enabled-tools",
+        default=None,
+        help=(
+            "Comma-separated tools allowed to actuate (e.g. 'copilot,sonarcloud'). "
+            "Default: resolved from PR_FIX_TOOL_* env (copilot on, others off)."
+        ),
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    enabled_tools = (
+        {tool.strip() for tool in args.enabled_tools.split(",") if tool.strip()}
+        if args.enabled_tools is not None
+        else None
+    )
     return run(
         output=args.output,
         context=args.context,
         event_path=args.event_path,
         event_name=args.event_name,
+        enabled_tools=enabled_tools,
     )
 
 
