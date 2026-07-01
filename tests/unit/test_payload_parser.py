@@ -138,6 +138,17 @@ def test_non_object_payload_fails_closed(tmp_path: Path) -> None:
         PayloadParser(path).parse()
 
 
+def test_invalid_schema_document_fails_closed(tmp_path: Path) -> None:
+    payload_path = _write(tmp_path, _valid_payload())
+    schema_path = tmp_path / "broken-schema.json"
+    # A structurally-valid JSON object that is not a valid JSON Schema:
+    # ``type`` must be a string or array of strings, never an integer.
+    schema_path.write_text(json.dumps({"type": 123}), encoding="utf-8")
+
+    with pytest.raises(PayloadIngestionError, match="not a valid JSON Schema"):
+        PayloadParser(payload_path, schema_path=schema_path).parse()
+
+
 def test_missing_required_top_level_key_fails_schema(tmp_path: Path) -> None:
     payload = _valid_payload()
     del payload["autofix_candidates"]

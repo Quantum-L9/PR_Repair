@@ -163,6 +163,13 @@ class GitHubConnector:
             raise ValueError("unexpected GitHub comment response payload")
         return payload
 
+    def delete_issue_comment(self, repo_owner: str, repo_name: str, comment_id: int) -> None:
+        response = self._session.delete(
+            f"{self._base_url}/repos/{repo_owner}/{repo_name}/issues/comments/{comment_id}",
+            timeout=30,
+        )
+        response.raise_for_status()
+
     def _get(self, path: str, params: dict[str, object] | None = None) -> Any:
         response = self._session.get(f"{self._base_url}{path}", params=params, timeout=30)
         response.raise_for_status()
