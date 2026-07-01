@@ -41,6 +41,10 @@ class _CommentConnector(Protocol):
         self, repo_owner: str, repo_name: str, comment_id: int, body: str
     ) -> dict[str, object]: ...
 
+    def delete_issue_comment(
+        self, repo_owner: str, repo_name: str, comment_id: int
+    ) -> None: ...
+
 
 def build_pr_comment(
     execution: RepairExecution,
@@ -83,20 +87,28 @@ def upsert_implementer_comment(
     connector: _CommentConnector, pr: PRRef, body: str
 ) -> dict[str, object]:
     """Maintain exactly one marker-keyed comment per PR: update if present, else create."""
-    if MARKER not in body:
-        msg = "implementer comment body is missing the L9 marker"
+    # The marker must LEAD the body (Trio Governance protocol). Requiring it at the
+    # start prevents collisions with comments that merely quote the marker.
+    if not body.startswith(MARKER):
+        msg = "implementer comment body must start with the L9 marker"
         raise ValueError(msg)
 
     existing = connector.get_issue_comments(pr.repo_owner, pr.repo_name, pr.pr_number)
+    marker_ids: list[int] = []
     for comment in existing:
-        comment_body = comment.get("body")
-        if isinstance(comment_body, str) and MARKER in comment_body:
-            comment_id = comment.get("id")
-            if isinstance(comment_id, int):
-                return connector.update_issue_comment(
-                    pr.repo_owner, pr.repo_name, comment_id, body
-                )
-    return connector.post_pr_comment(pr.repo_owner, pr.repo_name, pr.pr_number, body)
+        body_value = comment.get("body")
+        id_value = comment.get("id")
+        if isinstance(body_value, str) and body_value.startswith(MARKER) and isinstance(id_value, int):
+            marker_ids.append(id_value)
+    if not marker_ids:
+        return connector.post_pr_comment(pr.repo_owner, pr.repo_name, pr.pr_number, body)
+
+    # Converge to exactly one: update the first marker comment and delete any
+    # historical duplicates so the "single marker-keyed comment" contract holds.
+    primary_id, *duplicate_ids = marker_ids
+    for duplicate_id in duplicate_ids:
+        connector.delete_issue_comment(pr.repo_owner, pr.repo_name, duplicate_id)
+    return connector.update_issue_comment(pr.repo_owner, pr.repo_name, primary_id, body)
 
 
 def _table_row(
@@ -129,11 +141,9 @@ def _patch_status(
             return "⏳ planned"
         return "—"
     if finding.review_disposition is ReviewDisposition.manual_review:
-        if proposal is None:
-            return "👤 manual review"
-        if proposal.abstained:
-            return "👤 manual review (no proposal)"
-        return "📝 proposed"
+        if proposal is not None and not proposal.abstained:
+            return "📝 proposed"
+        return "👤 manual"
     return "—"
 
 
