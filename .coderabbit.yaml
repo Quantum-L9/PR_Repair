@@ -1,0 +1,44 @@
+# CodeRabbit configuration for PR_Repair.
+# Schema: https://docs.coderabbit.ai/reference/configuration
+#
+# CodeRabbit runs as a GitHub App — install it on the Quantum-L9 org (or this
+# repo) from https://github.com/apps/coderabbitai. The app reviews PRs
+# automatically; this file tunes its behavior. CODERABBIT_TOKEN is only needed
+# for the API/self-hosted plan, not the SaaS app.
+
+language: en-US
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - "!runtime/**"
+    - "!artifacts/**"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!router-shim/node_modules/**"
+  path_instructions:
+    - path: "src/pr_repair/**"
+      instructions: >
+        Enforce the L9 Implementer Bot invariants: deterministic autofixes must
+        never call the LLM; the LLM lane must respect protected paths and
+        never-auto-repair categories; every mutation must pass native
+        verification with rollback on failure. Flag any code that could push
+        without passing verification or that grants merge authority.
+    - path: "tests/**"
+      instructions: >
+        Prefer behavior assertions over implementation details. Flag fixtures
+        that are internally inconsistent (e.g. mismatched pr_number).
+
+chat:
+  auto_reply: true
