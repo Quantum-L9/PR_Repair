@@ -29,3 +29,14 @@ class StateStoreError(PRRepairError):
 @dataclass(slots=True)
 class ExecutionFlowError(PRRepairError):
     pass
+
+
+@dataclass(slots=True)
+class PayloadIngestionError(PRRepairError):
+    """Raised when the agent review payload is missing, unreadable, or invalid.
+
+    The pipeline treats this as a fail-closed signal: no repairs are attempted
+    when the canonical payload contract cannot be satisfied.
+    """
+
+    pass

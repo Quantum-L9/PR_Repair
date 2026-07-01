@@ -1,0 +1,50 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: pr_repair_pipeline
+# engine: pr_repair
+# layer: [routing, contract]
+# tags: [fix-matrix, strategy, tier, depth]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# Fix-strategy matrix: maps a finding's (tool, rule_id | tag | category, complexity)
+# to a concrete fix strategy. Deterministic handlers run first; LLM descriptors
+# carry the model tier + search depth honored by the LLM-Router (Phase 3).
+#
+# Match priority (most specific wins): rule_id > tag > category > wildcard.
+# `tool` and `complexity`, when present on a rule, are additional constraints that
+# must also match. Unmatched findings fall through to `no_match_behavior`.
+
+version: 1
+no_match_behavior: propose_only
+
+rules:
+  # Exact rule ids are the most specific — a known deterministic Semgrep rule.
+  - match: { rule_id: "l9.transport-packet-rename" }
+    strategy: { kind: deterministic, handler: exact_suggestion }
+
+  # Copilot suggestion blocks tagged style/lint are safe deterministic edits.
+  - match: { tool: copilot, tag: style }
+    strategy: { kind: deterministic, handler: exact_suggestion }
+
+  - match: { category: lint_failure, complexity: low }
+    strategy: { kind: deterministic, handler: exact_suggestion }
+
+  # Architecture/security findings are high-complexity → top-tier model, deep search.
+  - match: { category: architecture_boundary_violation }
+    strategy: { kind: llm, task_type: code_generation, tier: opus, depth: high, risk: high }
+
+  - match: { category: security_issue }
+    strategy: { kind: llm, task_type: code_generation, tier: opus, depth: high, risk: high }
+
+  # Complexity-tiered defaults (the Mistral=medium / Opus=high policy lives here).
+  - match: { complexity: high }
+    strategy: { kind: llm, task_type: code_generation, tier: opus, depth: high }
+
+  - match: { complexity: medium }
+    strategy: { kind: llm, task_type: code_generation, tier: mistral-large, depth: medium }
+
+  # Wildcard fallback: cheapest tier, shallow depth.
+  - match: { "*": true }
+    strategy: { kind: llm, task_type: code_generation, tier: haiku, depth: low }

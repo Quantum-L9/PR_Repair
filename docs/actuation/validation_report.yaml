@@ -1,0 +1,48 @@
+# Per-Tool Review Actuation Layer — consolidated validation (Phases 0–5)
+feature: per_tool_review_actuation_layer
+final_status: APPROVED_EXECUTION_READY
+
+checks_run_count: 4
+checks_passed_count: 3
+checks_failed_count: 0
+checks_advisory_count: 1
+
+checks:
+  - name: pytest
+    command: "uv run pytest -q"
+    result: PASS
+    evidence: "171 passed"
+  - name: ruff
+    command: "uv run ruff check ."
+    result: PASS
+    evidence: "clean on all new/changed modules"
+  - name: shim_syntax
+    command: "node --check router-shim/shim.mjs"
+    result: PASS
+    evidence: "OK"
+  - name: mypy_strict
+    command: "uv run mypy src --strict"
+    result: ADVISORY
+    evidence: "pre-existing pydantic/yaml/requests unstubbed baseline; no new error classes"
+
+hard_gates:
+  no_stub_gate: PASS            # no TODO-only bodies / pass placeholders in new code
+  importability_gate: PASS      # all new modules import cleanly (exercised by tests)
+  contract_depth_gate: PASS     # fix_matrix.yaml (version + rules) + payload schema extension complete
+  adapter_specificity_gate: PASS # each adapter matches its own login/slug; own-event tests
+  tenant_isolation_gate: PASS   # connector reply/resolve scoped by owner/repo/pr/thread_id; tests assert
+  evidence_gate: PASS           # every claim maps to a named test/command
+
+phase_status:
+  phase_0_enablers: APPROVED_EXECUTION_READY
+  phase_1_copilot: APPROVED_EXECUTION_READY
+  phase_2_matrix: APPROVED_EXECUTION_READY
+  phase_3_llm_routing: APPROVED_EXECUTION_READY
+  phase_4_adapters: APPROVED_EXECUTION_READY
+  phase_5_audit: APPROVED_EXECUTION_READY
+
+unresolved_risks:
+  - "L9LLMRouter.execute acceptance of depth/effort/tier hints is not verifiable from this repo (external). ADR 0001 documents the pass-through; router ignores unknown fields (no breakage)."
+  - "Sonar/GitGuardian adapters read inline review threads; if a tool posts only a summary comment or check annotations, coverage for that tool is partial until a fixture confirms its live shape."
+
+unknowns: []

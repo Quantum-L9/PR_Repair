@@ -56,10 +56,52 @@ def push_changes(branch: str, repo_root: Path | None = None) -> None:
 
 def rollback_to_backup(ref_name: str, repo_root: Path | None = None) -> None:
     """
-    Hard-reset working tree to the backup ref created earlier.
+    Hard-reset working tree to the backup ref and remove untracked debris.
+
+    Verification failure must leave a perfectly clean tree: ``reset --hard``
+    restores tracked files to the backup state, and ``git clean -fd`` removes any
+    untracked files a bad patch created. No broken code can survive to be pushed.
     """
     root = repo_root or Path.cwd()
     _run_git(["reset", "--hard", ref_name], root)
+    clean_worktree(root)
+
+
+def clean_worktree(repo_root: Path | None = None) -> None:
+    """Remove untracked files and directories from the working tree."""
+    root = repo_root or Path.cwd()
+    _run_git(["clean", "-fd"], root)
+
+
+def snapshot_worktree(repo_root: Path | None = None) -> str | None:
+    """Capture the current tracked working-tree state as a commit, without touching it.
+
+    Returns the snapshot commit sha, or None when ``git stash create`` captures
+    nothing. NOTE: ``git stash create`` does not include *untracked* files, so a
+    tree whose only changes are untracked also yields None -- and those files are
+    then removed by the ``git clean -fd`` in ``restore_worktree``. Callers that need
+    pre-existing changes preserved across rollback must have them tracked first (the
+    autofix lane modifies tracked files, so its changes are captured).
+    """
+    root = repo_root or Path.cwd()
+    sha = _run_git(["stash", "create"], root).stdout.strip()
+    return sha or None
+
+
+def restore_worktree(snapshot: str | None, repo_root: Path | None = None) -> None:
+    """Restore the working tree to a prior snapshot, dropping any newer changes.
+
+    Resets tracked files to HEAD, removes untracked debris, then re-applies the
+    snapshot's tracked modifications (if any). A None snapshot restores a clean HEAD.
+    """
+    root = repo_root or Path.cwd()
+    _run_git(["reset", "--hard", "HEAD"], root)
+    _run_git(["clean", "-fd"], root)
+    if snapshot:
+        # --index restores the staged/index state too; `git stash create` captures
+        # both working tree and index, so without it any pre-existing staged
+        # changes from a prior lane would be silently dropped after rollback.
+        _run_git(["stash", "apply", "--index", snapshot], root)
 
 
 def _run_git(args: list[str], repo_root: Path) -> subprocess.CompletedProcess[str]:

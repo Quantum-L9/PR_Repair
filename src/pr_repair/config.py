@@ -23,10 +23,13 @@ from pr_repair.types import ExecutionMode, TierLevel
 class AppConfig(BaseModel):
     github_token: str
     github_repository: str
-    coderabbit_api_key: str | None = None
-    codecov_api_key: str | None = None
-    coderabbit_api_base_url: str | None = None
-    codecov_api_base_url: str = "https://api.codecov.io"
+    payload_path: Path = Path("artifacts/agent_review_payload.json")
+    post_comment: bool = False
+    llm_enabled: bool = False
+    llm_apply: bool = False
+    llm_client_id: str = "implementer-bot"
+    llm_shim_path: Path = Path("router-shim/shim.mjs")
+    llm_node_bin: str = "node"
     max_prs: int = 5
     verify_command: list[str] = Field(default_factory=lambda: ["make", "agent-check"])
     mode: ExecutionMode = ExecutionMode.dry_run
@@ -34,6 +37,26 @@ class AppConfig(BaseModel):
     output_dir: Path = Path("runtime/pr_repair")
     include_drafts: bool = False
     write_ceiling: TierLevel = TierLevel.t1
+    fix_matrix_path: Path = Path("contracts/fix_matrix.yaml")
+    # Per-tool actuation toggles. Copilot is the proven default lane; the others
+    # are opt-in until validated in the target repo.
+    tool_copilot: bool = True
+    tool_coderabbit: bool = False
+    tool_sonarcloud: bool = False
+    tool_gitguardian: bool = False
+
+    @property
+    def enabled_tools(self) -> set[str]:
+        return {
+            name
+            for name, on in (
+                ("copilot", self.tool_copilot),
+                ("coderabbit", self.tool_coderabbit),
+                ("sonarcloud", self.tool_sonarcloud),
+                ("gitguardian", self.tool_gitguardian),
+            )
+            if on
+        }
 
     @field_validator("github_repository")
     @classmethod
@@ -87,10 +110,15 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
     return AppConfig(
         github_token=github_token,
         github_repository=github_repository,
-        coderabbit_api_key=os.getenv("CODERABBIT_API_KEY"),
-        codecov_api_key=os.getenv("CODECOV_API_KEY"),
-        coderabbit_api_base_url=os.getenv("CODERABBIT_API_BASE_URL"),
-        codecov_api_base_url=os.getenv("CODECOV_API_BASE_URL", "https://api.codecov.io"),
+        payload_path=Path(
+            os.getenv("PR_FIX_PAYLOAD_PATH", "artifacts/agent_review_payload.json")
+        ),
+        post_comment=os.getenv("PR_FIX_POST_COMMENT", "0") == "1",
+        llm_enabled=os.getenv("PR_FIX_LLM_ENABLED", "0") == "1",
+        llm_apply=os.getenv("PR_FIX_LLM_APPLY", "0") == "1",
+        llm_client_id=os.getenv("PR_FIX_LLM_CLIENT_ID", "implementer-bot"),
+        llm_shim_path=Path(os.getenv("PR_FIX_LLM_SHIM_PATH", "router-shim/shim.mjs")),
+        llm_node_bin=os.getenv("PR_FIX_LLM_NODE_BIN", "node"),
         max_prs=int(os.getenv("PR_FIX_MAX_PRS", "5")),
         verify_command=verify_command,
         mode=mode,
@@ -98,6 +126,11 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
         output_dir=Path(os.getenv("PR_FIX_OUTPUT_DIR", "runtime/pr_repair")),
         include_drafts=os.getenv("PR_FIX_INCLUDE_DRAFTS", "0") == "1",
         write_ceiling=write_ceiling,
+        fix_matrix_path=Path(os.getenv("PR_FIX_MATRIX_PATH", "contracts/fix_matrix.yaml")),
+        tool_copilot=os.getenv("PR_FIX_TOOL_COPILOT", "1") == "1",
+        tool_coderabbit=os.getenv("PR_FIX_TOOL_CODERABBIT", "0") == "1",
+        tool_sonarcloud=os.getenv("PR_FIX_TOOL_SONARCLOUD", "0") == "1",
+        tool_gitguardian=os.getenv("PR_FIX_TOOL_GITGUARDIAN", "0") == "1",
     )
 
 

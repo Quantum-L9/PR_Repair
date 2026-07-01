@@ -27,7 +27,7 @@ def test_generate_patch_instructions_reads_live_file_content(tmp_path: Path) -> 
             Finding(
                 finding_id="f-1",
                 pr_number=1,
-                source_name=SourceName.coderabbit,
+                source_name=SourceName.agent_review,
                 source_priority=100,
                 severity=Severity.medium,
                 category="lint_failure",

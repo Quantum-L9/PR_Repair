@@ -18,7 +18,7 @@ from pr_repair.classification.taxonomy import (
     NEVER_AUTO_REPAIR_CATEGORIES,
 )
 from pr_repair.repo_context.rules import classify_path_tier, is_protected_path, is_skip_review_path
-from pr_repair.types import Finding, RepoContext, TierLevel
+from pr_repair.types import Finding, RepoContext, ReviewDisposition, TierLevel
 
 
 def classify_finding(finding: Finding, repo_context: RepoContext) -> Finding:
@@ -40,6 +40,12 @@ def classify_finding(finding: Finding, repo_context: RepoContext) -> Finding:
         category = "architecture_boundary_violation"
 
     repairable = category in AUTO_REPAIRABLE_CATEGORIES and not protected_path
+    # A finding the upstream Audit Bot deterministically routed to autofix carries
+    # an exact Semgrep replacement; that disposition is authoritative for
+    # repairability and bypasses category-based gating -- UNLESS a hard safety gate
+    # fires (protected path or a never-auto-repair category).
+    if finding.review_disposition is ReviewDisposition.autofix and not protected_path:
+        repairable = True
     if category in NEVER_AUTO_REPAIR_CATEGORIES:
         repairable = False
     contract_ids = list(CATEGORY_TO_CONTRACT_IDS.get(category, []))
@@ -76,7 +82,7 @@ def _infer_category(finding: Finding) -> str:
     source_name = finding.source_name.value
 
     if "coverage" in message:
-        return "codecov_missing_tests_for_changed_code"
+        return "missing_tests_for_changed_code"
     if "mypy" in message or "type" in message:
         return "typing_failure"
     if "ruff" in message or "lint" in message or "format" in message or "unused import" in message:
@@ -86,13 +92,9 @@ def _infer_category(finding: Finding) -> str:
     if "yaml.load" in message or "safe_load" in message:
         return "compliance_failure"
     if "credential" in message or "api key" in message or "token" in message:
-        return "coderabbit_security_issue"
+        return "security_issue"
     if source_name == "github_checks":
         return "github_required_check_failure"
-    if source_name == "codecov_cloud":
-        return "codecov_patch_coverage_failure"
-    if source_name == "coderabbit":
-        return "coderabbit_style_violation"
     return finding.category or "ambiguous_comment"
 
 

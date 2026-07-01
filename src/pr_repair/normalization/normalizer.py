@@ -36,8 +36,7 @@ def normalize_bundle(bundle: FindingBundle) -> FindingBundle:
     """
     normalized_bundle = deepcopy(bundle)
     all_groups = [
-        normalized_bundle.coderabbit_findings,
-        normalized_bundle.codecov_findings,
+        normalized_bundle.agent_review_findings,
         normalized_bundle.github_check_findings,
         normalized_bundle.github_comment_findings,
     ]
