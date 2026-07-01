@@ -13,6 +13,25 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def _resolve_within_root(root: Path, file_path: str) -> Path:
+    """Resolve ``file_path`` against ``root`` and assert it stays inside ``root``.
+
+    ``file_path`` originates from the (untrusted) review payload, so joining it
+    onto ``root`` unchecked allows path traversal (``../``) or absolute-path
+    escape outside the repository -- the vulnerability flagged by SonarCloud
+    ``pythonsecurity:S2083`` ("Change this code to not construct the path from
+    user-controlled data"). We canonicalize both the root and the target and
+    require the target to be contained within the root before any read/write,
+    while still allowing every valid repo-relative path.
+    """
+    root_resolved = root.resolve()
+    target = (root_resolved / file_path).resolve()
+    if target != root_resolved and root_resolved not in target.parents:
+        msg = f"patch target escapes repository root: {file_path}"
+        raise ValueError(msg)
+    return target
+
+
 def apply_patch_instructions(
     instructions: list[dict[str, object]],
     repo_root: Path | None = None,
@@ -51,7 +70,7 @@ def _apply_replace_line(instruction: dict[str, object], root: Path) -> str:
     if not isinstance(replacement, str):
         raise ValueError("instruction missing replacement content")
 
-    path = root / file_path
+    path = _resolve_within_root(root, file_path)
     lines = _read_lines(path, file_path)
     if line_number > len(lines):
         msg = f"line_number {line_number} out of range for {file_path}"
@@ -84,7 +103,7 @@ def _apply_replace_range(instruction: dict[str, object], root: Path) -> str:
     if not isinstance(replacement, str):
         raise ValueError("instruction missing replacement content")
 
-    path = root / file_path
+    path = _resolve_within_root(root, file_path)
     lines = _read_lines(path, file_path)
     if line_end > len(lines):
         msg = f"line range {line_start}-{line_end} out of range for {file_path}"

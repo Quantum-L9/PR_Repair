@@ -89,6 +89,49 @@ class ReviewIngestError(Exception):
     """Review context existed but is malformed or un-normalizable (fail closed)."""
 
 
+def _allowed_io_roots() -> tuple[Path, ...]:
+    """Return the canonical directories this entrypoint may read from / write to.
+
+    Defaults to the current working directory (the repo/actuation root) plus the
+    OS temp dir (used by tests and by workflow scratch space). Operators can add
+    further roots via ``PR_REPAIR_IO_ROOT`` (os.pathsep-separated) for callers
+    that legitimately stage inputs/outputs outside the CWD. Anything outside all
+    allowed roots is rejected before any filesystem access, which breaks the
+    path-injection taint flow flagged by SonarCloud ``pythonsecurity:S8707``
+    ("LLMs running this code with faulty CLI arguments can escape file system
+    restrictions") without blocking valid repo-relative or staged paths.
+    """
+    import tempfile
+
+    roots = [Path.cwd().resolve(), Path(tempfile.gettempdir()).resolve()]
+    extra = os.getenv("PR_REPAIR_IO_ROOT", "")
+    for part in extra.split(os.pathsep):
+        part = part.strip()
+        if part:
+            roots.append(Path(part).resolve())
+    return tuple(roots)
+
+
+def _safe_path(path: str) -> Path:
+    """Canonicalize ``path`` and assert it stays within an allowed IO root.
+
+    Raises :class:`ReviewIngestError` on traversal outside every allowed root,
+    so a malicious/faulty CLI argument (e.g. ``../../etc/passwd`` or an absolute
+    path pointing outside the sandbox) cannot escape the filesystem restriction.
+    """
+    if not isinstance(path, str) or not path:
+        raise ReviewIngestError("path argument must be a non-empty string")
+    resolved = Path(path).resolve()
+    roots = _allowed_io_roots()
+    for root in roots:
+        if resolved == root or root in resolved.parents:
+            return resolved
+    allowed = ", ".join(str(r) for r in roots)
+    raise ReviewIngestError(
+        f"refusing path outside allowed roots ({allowed}): {path}"
+    )
+
+
 class ReviewSkipped(Exception):
     """No actionable review source is present (clean skip, not a failure)."""
 
@@ -276,7 +319,7 @@ def _validate_payload(payload: dict[str, Any]) -> None:
 
 
 def _load_json(path: str) -> Any:
-    file_path = Path(path)
+    file_path = _safe_path(path)
     if not file_path.exists():
         raise ReviewIngestError(f"input file not found: {path}")
     try:
@@ -286,7 +329,7 @@ def _load_json(path: str) -> Any:
 
 
 def _write_payload(output: str, payload: dict[str, Any]) -> None:
-    out_path = Path(output)
+    out_path = _safe_path(output)
     if out_path.parent and not out_path.parent.exists():
         out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(

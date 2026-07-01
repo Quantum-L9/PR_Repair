@@ -25,7 +25,7 @@ def _thread(body: str, *, resolved: bool = False, login: str = "copilot-pull-req
         "path": "engine.py",
         "line": 2,
         "comments": {"nodes": [
-            {"id": "PRRC_1", "databaseId": 5001, "body": body, "author": {"login": login}, "url": "http://x"}
+            {"id": "PRRC_1", "databaseId": 5001, "body": body, "author": {"login": login}, "url": "https://x"}
         ]},
     }
 
