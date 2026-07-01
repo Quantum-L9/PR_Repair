@@ -60,6 +60,8 @@ def _build_autofix_instruction(finding: Finding, lines: list[str] | None) -> dic
         return None
     line_start = finding.line_start
     line_end = finding.line_end if finding.line_end is not None else line_start
+    # ``line_end >= line_start`` is guaranteed by Finding.validate_line_range, so the
+    # only degrees of freedom left here are the on-disk bounds.
     if line_start < 1 or line_end > len(lines):
         return None
 
