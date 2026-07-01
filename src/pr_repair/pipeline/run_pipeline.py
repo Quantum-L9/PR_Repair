@@ -34,7 +34,8 @@ from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.repo_context.loader import load_repo_context
 from pr_repair.runtime import RuntimeManager
 from pr_repair.state_store import StateStore
-from pr_repair.types import ExecutionMode, PRRef, RepairExecution
+from pr_repair.telemetry import TraceRecorder, build_autofix_telemetry
+from pr_repair.types import ExecutionMode, PRRef, RepairExecution, RepoContext, RuntimeState
 from pr_repair.repair.repair_executor import execute_repair_plan
 
 
@@ -56,6 +57,30 @@ def run_pipeline(config: AppConfig) -> int:
         current_phase="parse_payload",
     )
 
+    # Record the full structured-event timeline for this run, written even on a
+    # fail-closed exit so every run leaves an auditable trace.
+    recorder = TraceRecorder()
+    recorder.start()
+    try:
+        return _run_pipeline_traced(config, repo_root, repo_context, store, runtime_manager, run_state)
+    finally:
+        recorder.stop()
+        # Trace emission is best-effort and must never mask the run's real exit code.
+        # StateStore.write_json wraps OSError as StateStoreError, so catch broadly.
+        try:
+            store.write_json("run_trace.json", recorder.to_list())
+        except Exception as exc:  # noqa: BLE001 - best-effort trace write
+            log_event("run_trace_write_failed", error=str(exc))
+
+
+def _run_pipeline_traced(
+    config: AppConfig,
+    repo_root: Path,
+    repo_context: RepoContext,
+    store: StateStore,
+    runtime_manager: RuntimeManager,
+    run_state: RuntimeState,
+) -> int:
     try:
         parsed = PayloadParser(config.payload_path).parse()
     except PayloadIngestionError as exc:
@@ -157,6 +182,16 @@ def run_pipeline(config: AppConfig) -> int:
         plans=[plan],
         executions=executions,
         reports=[report],
+    )
+
+    # Per-rule autofix telemetry feeds the CI shadow->blocking promotion cycle.
+    autofix_telemetry = build_autofix_telemetry(route.autofix, executions)
+    store.write_json(f"prs/pr_{pr.pr_number}/autofix_telemetry.json", autofix_telemetry)
+    log_event(
+        "autofix_telemetry_emitted",
+        pr_number=pr.pr_number,
+        promotion_candidates=autofix_telemetry["promotion_candidates"],
+        false_positive_rules=autofix_telemetry["false_positive_rules"],
     )
 
     packets = extract_learning_packets(executions)

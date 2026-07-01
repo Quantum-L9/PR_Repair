@@ -86,6 +86,43 @@ def test_run_pipeline_repair_mode_writes_execution_and_learning_artifacts(monkey
     assert (tmp_path / "runtime" / "repair_plans.yaml").exists()
     assert (tmp_path / "runtime" / "learning_report.md").exists()
     assert (tmp_path / "runtime" / "prs" / "pr_11" / "repair_plan.json").exists()
+    # W6: telemetry + trace artifacts
+    assert (tmp_path / "runtime" / "prs" / "pr_11" / "autofix_telemetry.json").exists()
+    trace_path = tmp_path / "runtime" / "run_trace.json"
+    assert trace_path.exists()
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    events = [entry["event"] for entry in trace]
+    assert "payload_ingested" in events
+    assert "pipeline_routing" in events
+    assert "autofix_telemetry_emitted" in events
+
+
+def test_trace_write_failure_does_not_mask_exit_code(tmp_path: Path, monkeypatch) -> None:
+    from pr_repair.errors import StateStoreError
+    from pr_repair.state_store import StateStore
+
+    (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    original = StateStore.write_json
+
+    def flaky_write(self, name, payload):
+        if name == "run_trace.json":
+            raise StateStoreError("disk full")
+        return original(self, name, payload)
+
+    monkeypatch.setattr(StateStore, "write_json", flaky_write)
+
+    config = AppConfig(
+        github_token="token", github_repository="owner/repo",
+        payload_path=tmp_path / "missing.json",
+        verify_command=["python", "-c", "print('ok')"], mode=ExecutionMode.dry_run,
+        output_dir=tmp_path / "runtime", write_ceiling=TierLevel.t1,
+    )
+
+    # StateStoreError from the best-effort trace write must be swallowed; the real
+    # fail-closed exit code (2) is preserved.
+    assert run_pipeline(config) == 2
 
 
 def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypatch) -> None:
@@ -107,3 +144,8 @@ def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypa
     assert result == 2
     # Fail-closed: no per-PR repair artifacts are written.
     assert not (tmp_path / "runtime" / "prs").exists()
+    # ...but the run trace is still emitted, capturing the failure.
+    trace_path = tmp_path / "runtime" / "run_trace.json"
+    assert trace_path.exists()
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert "payload_ingestion_failed" in [entry["event"] for entry in trace]
