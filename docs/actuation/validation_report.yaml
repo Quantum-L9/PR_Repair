@@ -3,9 +3,9 @@ feature: per_tool_review_actuation_layer
 final_status: APPROVED_EXECUTION_READY
 
 checks_run_count: 4
-checks_passed_count: 3
+checks_passed_count: 4
 checks_failed_count: 0
-checks_advisory_count: 1
+checks_advisory_count: 0
 
 checks:
   - name: pytest
@@ -21,9 +21,34 @@ checks:
     result: PASS
     evidence: "OK"
   - name: mypy_strict
-    command: "uv run mypy src --strict"
-    result: ADVISORY
-    evidence: "pre-existing pydantic/yaml/requests unstubbed baseline; no new error classes"
+    command: "uv run --group dev mypy src --strict"
+    result: PASS
+    count: 0
+    evidence: >
+      "Success: no issues found in 89 source files." The prior 18 advisory
+      errors were all closed with minimal, behavior-preserving annotations:
+      missing dict[...] generics filled with dict[str, object]; Any-returns
+      behind isinstance guards narrowed with typing.cast; state-field Literal
+      narrowing (_risk_level -> Literal[...], ci/review status via cast to the
+      CIStatus/ReviewStatus aliases); union-attr on webhook `head` resolved by
+      narrowing through a local; a redundant `# type: ignore[attr-defined]`
+      removed; two untyped wrapper signatures annotated (RepairPlan, AppConfig).
+      The previously-reported ~66 was a measurement artifact: running
+      `uv run mypy` before mypy was co-installed with the runtime deps left mypy
+      unable to see pydantic's PEP 561 types (BaseModel -> Any) plus missing
+      yaml/requests stubs. Declaring the `dev` dependency group made mypy share
+      the venv with pydantic (66 -> 18); the annotation pass closed the rest
+      (18 -> 0). No runtime behavior changed; pytest (181) and ruff stay green.
+    real_bug_fixed:
+      file: "src/pr_repair/patching/__init__.py:2"
+      code: attr-defined
+      detail: >
+        Back-compat shim imported `build_patch_instructions`, which does not
+        exist in patch_generator (real name: generate_patch_instructions), so
+        `import pr_repair.patching` raised ImportError. Dormant (no code imports
+        this shim today), but a genuine defect — fixed by re-exporting
+        `generate_patch_instructions as build_patch_instructions`, restoring the
+        shim's intended old-name compatibility without deleting it.
 
 hard_gates:
   no_stub_gate: PASS            # no TODO-only bodies / pass placeholders in new code

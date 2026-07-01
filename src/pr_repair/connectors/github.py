@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -218,7 +218,9 @@ class GitHubConnector:
         response.raise_for_status()
 
     def _get(self, path: str, params: dict[str, object] | None = None) -> Any:
-        response = self._session.get(f"{self._base_url}{path}", params=params, timeout=30)
+        response = self._session.get(
+            f"{self._base_url}{path}", params=cast(Any, params), timeout=30
+        )
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, (list, dict)):

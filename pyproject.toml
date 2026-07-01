@@ -15,6 +15,20 @@ dependencies = [
 [project.scripts]
 pr-repair = "pr_repair.cli:main"
 
+# Dev/type-check tooling. Declaring the stubs + mypy here means `uv run mypy`
+# resolves them in the SAME environment as the runtime deps (pydantic ships its
+# own PEP 561 types), so mypy sees real types instead of Any. Run type-checking
+# as: `uv run --group dev mypy src --strict`.
+[dependency-groups]
+dev = [
+  "mypy>=1.11",
+  "types-requests",
+  "types-PyYAML",
+  "pytest>=8",
+  "pytest-cov",
+  "ruff>=0.6",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
@@ -22,6 +36,17 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+# Backward-compat re-export shims: these modules intentionally star-import (or
+# re-export) their canonical counterparts so old import paths keep working.
+# F401 (unused re-export) and F403 (star import) are expected here, not defects.
+"src/pr_repair/artifacts/*" = ["F401", "F403"]
+"src/pr_repair/governance/*" = ["F401", "F403"]
+"src/pr_repair/patching/*" = ["F401", "F403"]
+"src/pr_repair/orchestration/__init__.py" = ["F401", "F403"]
+"src/pr_repair/orchestration/run_pipeline.py" = ["F403"]
+"src/pr_repair/classification/__init__.py" = ["F401"]
 
 [tool.mypy]
 python_version = "3.11"

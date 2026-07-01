@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Literal
 
 from pr_repair.classification.classifier import is_never_auto_repair, requires_approval_for_category
 from pr_repair.config import AppConfig, resolve_verify_command
@@ -78,7 +79,7 @@ def _risk_level(
     findings: list[Finding],
     protected_paths_touched: bool,
     target_tier: TierLevel,
-) -> str:
+) -> Literal["low", "medium", "high"]:
     if protected_paths_touched:
         return "high"
     if target_tier in {TierLevel.t4, TierLevel.t5}:

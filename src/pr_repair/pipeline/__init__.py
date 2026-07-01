@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from pr_repair.config import AppConfig
 from pr_repair.pipeline import run_pipeline as _run_pipeline_module
 
 _ORCHESTRATION_SEAMS = (
@@ -20,7 +21,7 @@ _ORCHESTRATION_SEAMS = (
 )
 
 
-def run_pipeline(config):
+def run_pipeline(config: AppConfig) -> int:
     """Package-level callable wrapper that preserves monkeypatchable orchestration seams."""
     for name in _ORCHESTRATION_SEAMS:
         if hasattr(run_pipeline, name):
