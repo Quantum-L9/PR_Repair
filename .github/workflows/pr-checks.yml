@@ -44,23 +44,25 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install project + dev tooling
+      - name: Create venv + install project + dev tooling
+        # uv installs its own managed interpreter, which is externally managed and
+        # rejects `pip install --system`. Install into a project venv instead and
+        # run tools via `uv run`.
         run: |
-          uv pip install --system -e .
-          uv pip install --system ruff mypy pytest types-requests types-PyYAML
+          uv venv
+          uv pip install -e .
+          uv pip install ruff mypy pytest pytest-cov types-requests types-PyYAML
 
       - name: Ruff (advisory)
         continue-on-error: true
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Mypy --strict (advisory)
         continue-on-error: true
-        run: mypy src/ --strict
+        run: uv run mypy src/ --strict
 
       - name: Pytest (blocking gate) with coverage
-        run: |
-          uv pip install --system pytest-cov
-          pytest -q --cov=src/pr_repair --cov-report=xml --cov-report=term-missing
+        run: uv run pytest -q --cov=src/pr_repair --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage.xml
         if: always()
