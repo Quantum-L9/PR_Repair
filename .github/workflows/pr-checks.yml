@@ -44,12 +44,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create venv + install project + dev tooling
-        # uv installs its own managed interpreter, which is externally managed and
-        # rejects `pip install --system`. Install into a project venv instead and
-        # run tools via `uv run`.
+      - name: Install project + dev tooling
+        # setup-uv@v5 with python-version already provisions and activates a
+        # project .venv (see $VIRTUAL_ENV), so no explicit `uv venv` here — that
+        # would fail with "a virtual environment already exists". uv pip install
+        # targets the active venv; tools run via `uv run`.
         run: |
-          uv venv
           uv pip install -e .
           uv pip install ruff mypy pytest pytest-cov types-requests types-PyYAML
 
