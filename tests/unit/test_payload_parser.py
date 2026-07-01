@@ -88,6 +88,30 @@ def test_autofix_finding_is_repairable_and_carries_replacement(tmp_path: Path) -
     assert af.fingerprint and af.fingerprint != "pending"
 
 
+def test_tool_actuation_fields_are_parsed(tmp_path: Path) -> None:
+    payload = _valid_payload()
+    payload["autofix_candidates"][0].update(
+        {"tags": ["style", "auto"], "tool": "coderabbit", "thread_id": "PRRT_x", "comment_id": 555}
+    )
+    path = _write(tmp_path, payload)
+
+    af = PayloadParser(path).parse().autofix_findings[0]
+
+    assert af.tags == ["style", "auto"]
+    assert af.tool == "coderabbit"
+    assert af.thread_id == "PRRT_x"
+    assert af.comment_id == 555
+
+
+def test_tool_actuation_fields_default_empty_when_absent(tmp_path: Path) -> None:
+    mr = PayloadParser(_write(tmp_path, _valid_payload())).parse().manual_review_findings[0]
+
+    assert mr.tags == []
+    assert mr.tool is None
+    assert mr.thread_id is None
+    assert mr.comment_id is None
+
+
 def test_manual_finding_is_not_repairable(tmp_path: Path) -> None:
     path = _write(tmp_path, _valid_payload())
 
