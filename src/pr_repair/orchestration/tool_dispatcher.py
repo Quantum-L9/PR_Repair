@@ -32,11 +32,11 @@ from pr_repair.config import AppConfig
 from pr_repair.llm import build_llm_client
 from pr_repair.logging import log_event
 from pr_repair.normalization.fingerprint import build_finding_fingerprint
-from pr_repair.orchestration.router import route_findings
 from pr_repair.planning.llm_proposer import propose_repairs
 from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.priorities import SOURCE_PRIORITY
 from pr_repair.repair.repair_executor import execute_repair_plan
+from pr_repair.routing.fix_matrix import FixStrategyRegistry, load_fix_matrix
 from pr_repair.repo_context.loader import load_repo_context
 from pr_repair.tools.base import ToolAdapter
 from pr_repair.tools.responder import ResponderResult, ToolThreadResponder
@@ -50,6 +50,12 @@ from pr_repair.types import (
 )
 
 _REPAIR_MODES = {ExecutionMode.repair_and_verify, ExecutionMode.repair_verify_and_push}
+
+
+@dataclass(frozen=True)
+class _Route:
+    autofix: list[Finding]
+    manual: list[Finding]
 
 
 @dataclass
@@ -68,10 +74,12 @@ def run_tool_actuation(
     connector: Any,
     repo_root: Path,
     responder: ToolThreadResponder | None = None,
+    registry: FixStrategyRegistry | None = None,
 ) -> DispatchResult:
     """Run one tool's findings through the pipeline and respond per thread."""
     repo_context = load_repo_context(repo_root, write_ceiling=config.write_ceiling)
     responder = responder or ToolThreadResponder(connector, post_comment=config.post_comment)
+    registry = registry or load_fix_matrix(config.fix_matrix_path)
 
     items = adapter.to_payload_findings(adapter.read_findings(pr_ref, connector))
     findings = [_to_finding(item, pr_ref) for item in items]
@@ -79,13 +87,22 @@ def run_tool_actuation(
         return DispatchResult(handled=True, tool=adapter.tool_name)
 
     classified = classify_findings(findings, repo_context)
-    route = route_findings(classified)
+
+    # The fix matrix resolves each finding to a strategy (deterministic handler
+    # or an LLM tier/depth descriptor). Lane selection: a finding with an exact
+    # replacement runs the deterministic lane; everything else is manual, where
+    # the strategy carries the model tier/depth honored in Phase 3.
+    strategies = {f.finding_id: registry.resolve(f) for f in classified}
+    autofix_findings = [f for f in classified if f.replacement_text is not None]
+    manual_findings = [f for f in classified if f.replacement_text is None]
+    route = _Route(autofix_findings, manual_findings)
     log_event(
         "tool_actuation_routed",
         tool=adapter.tool_name,
         pr_number=pr_ref.pr_number,
         autofix=len(route.autofix),
         manual=len(route.manual),
+        matrix_version=registry.version,
     )
 
     responses: list[ResponderResult] = []
@@ -117,9 +134,13 @@ def run_tool_actuation(
         by_id = {p.finding_id: p for p in proposals}
         for finding in route.manual:
             proposal = by_id.get(finding.finding_id)
+            strategy = strategies[finding.finding_id]
             if proposal is not None and not proposal.abstained:
+                tier_note = f" (router tier: {strategy.tier}, depth: {strategy.depth})" if strategy.tier else ""
                 responses.append(
-                    responder.respond(pr_ref, finding, "proposed", detail=proposal.rationale)
+                    responder.respond(
+                        pr_ref, finding, "proposed", detail=f"{proposal.rationale}{tier_note}"
+                    )
                 )
             else:
                 responses.append(
