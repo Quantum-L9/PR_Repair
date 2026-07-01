@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 
 from pr_repair.llm.contract import LLMRequest
+from pr_repair.redaction import redact_secrets
 from pr_repair.types import Finding, Severity
 
 _SEVERITY_TO_COMPLEXITY = {
@@ -89,7 +90,9 @@ def _build_user_prompt(finding: Finding, repo_root: Path, feedback: str | None =
     if context is not None:
         payload["file_context"] = context
     if feedback:
-        payload["prior_attempt_verification_failure"] = feedback[-4000:]
+        # Verification stderr can contain secrets (tokens in URLs, env dumps, auth
+        # headers). Redact before forwarding to the external model.
+        payload["prior_attempt_verification_failure"] = redact_secrets(feedback)[-4000:]
     return json.dumps(payload, indent=2, sort_keys=True)
 
 

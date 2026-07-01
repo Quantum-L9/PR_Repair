@@ -76,8 +76,12 @@ def clean_worktree(repo_root: Path | None = None) -> None:
 def snapshot_worktree(repo_root: Path | None = None) -> str | None:
     """Capture the current tracked working-tree state as a commit, without touching it.
 
-    Returns the snapshot commit sha, or None if the tree is clean. Used to roll back
-    a speculative LLM patch while preserving pre-existing (e.g. autofix) changes.
+    Returns the snapshot commit sha, or None when ``git stash create`` captures
+    nothing. NOTE: ``git stash create`` does not include *untracked* files, so a
+    tree whose only changes are untracked also yields None -- and those files are
+    then removed by the ``git clean -fd`` in ``restore_worktree``. Callers that need
+    pre-existing changes preserved across rollback must have them tracked first (the
+    autofix lane modifies tracked files, so its changes are captured).
     """
     root = repo_root or Path.cwd()
     sha = _run_git(["stash", "create"], root).stdout.strip()

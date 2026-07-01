@@ -127,9 +127,11 @@ def _run_pipeline_traced(
         manual=len(route.manual),
     )
 
-    # Manual lane: ask the shared L9 LLM-Router for bounded patch proposals.
-    # Proposals are surfaced for human review, never auto-applied. With the
-    # default NullLLMClient this is a no-op (every finding abstains).
+    # Manual lane: ask the shared L9 LLM-Router for bounded patch proposals. By
+    # default proposals are surfaced for human review only; they are applied through
+    # the verify/rollback rails later (see _maybe_apply_llm_proposals) ONLY when
+    # config.llm_apply is enabled and the finding passes the governance gate. With
+    # the default NullLLMClient this whole lane is a no-op (every finding abstains).
     llm_client = build_llm_client(config)
     proposals = propose_repairs(route.manual, llm_client, repo_root, config.llm_client_id)
     if proposals:
