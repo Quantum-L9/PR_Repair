@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from pr_repair.llm.client import LLMClient, LLMUnavailableError
 from pr_repair.llm.contract import LLMResult, ProposedPatch
@@ -35,11 +36,14 @@ def propose_repairs(
     repo_root: Path,
     client_id: str,
     feedback: str | None = None,
+    resolved_by_id: dict[str, Any] | None = None,
 ) -> list[ProposedPatch]:
     """Generate bounded patch proposals for manual-review findings.
 
     ``feedback`` (verification stderr from a failed attempt) is threaded into every
     request so the model can correct itself on the single allowed retry.
+    ``resolved_by_id`` maps finding_id -> ResolvedLLMConfig (model_router tier/depth
+    hints, ADR 0001); absent, the router routes on complexity alone.
     """
     eligible = [f for f in manual_findings if not f.protected_path]
     skipped = len(manual_findings) - len(eligible)
@@ -48,7 +52,11 @@ def propose_repairs(
             log_event("llm_proposals_skipped_protected", count=skipped)
         return []
 
-    requests = [build_request(f, repo_root, client_id, feedback) for f in eligible]
+    resolved_by_id = resolved_by_id or {}
+    requests = [
+        build_request(f, repo_root, client_id, feedback, resolved_by_id.get(f.finding_id))
+        for f in eligible
+    ]
     try:
         results = llm_client.generate(requests)
     except LLMUnavailableError as exc:

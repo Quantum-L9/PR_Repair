@@ -30,6 +30,11 @@ class LLMRequest(BaseModel):
     user_prompt: str
     client_id: str = "implementer-bot"
     expected_output_tokens: int | None = None
+    # Optional routing hints resolved by model_router.py (ADR 0001). The shim
+    # relays these as-is; L9LLMRouter.execute is the acceptance authority.
+    depth: str | None = None
+    effort: str | None = None
+    tier: str | None = None
 
 
 class LLMResult(BaseModel):
