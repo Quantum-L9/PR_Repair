@@ -21,9 +21,27 @@ checks:
     result: PASS
     evidence: "OK"
   - name: mypy_strict
-    command: "uv run mypy src --strict"
+    command: "uv run --group dev mypy src --strict"
     result: ADVISORY
-    evidence: "pre-existing pydantic/yaml/requests unstubbed baseline; no new error classes"
+    count: 18
+    evidence: >
+      18 advisory errors, all type-hygiene (missing dict[...] generics, Literal
+      narrowing on state fields, Any-returns behind isinstance guards). The
+      previously-reported ~66 was a measurement artifact: running `uv run mypy`
+      before mypy was co-installed with the runtime deps left mypy unable to see
+      pydantic's PEP 561 types (BaseModel -> Any) plus missing yaml/requests
+      stubs. Declaring the `dev` dependency group (mypy + types-requests +
+      types-PyYAML) makes mypy share the venv with pydantic, dropping 66 -> 18
+      reproducibly. CI stays continue-on-error.
+    real_bug_flagged:
+      file: "src/pr_repair/patching/__init__.py:2"
+      code: attr-defined
+      detail: >
+        Back-compat shim explicitly imports `build_patch_instructions`, which does
+        not exist in patch_generator (real name: generate_patch_instructions), so
+        `import pr_repair.patching` raises ImportError. Dormant — no code imports
+        this shim today. Flagged, not silenced; fix or delete the dead shim
+        separately (out of this CI-hygiene pass, which must not rewrite shims).
 
 hard_gates:
   no_stub_gate: PASS            # no TODO-only bodies / pass placeholders in new code

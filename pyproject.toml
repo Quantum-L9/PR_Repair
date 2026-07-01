@@ -15,6 +15,20 @@ dependencies = [
 [project.scripts]
 pr-repair = "pr_repair.cli:main"
 
+# Dev/type-check tooling. Declaring the stubs + mypy here means `uv run mypy`
+# resolves them in the SAME environment as the runtime deps (pydantic ships its
+# own PEP 561 types), so mypy sees real types instead of Any. Run type-checking
+# as: `uv run --group dev mypy src --strict`.
+[dependency-groups]
+dev = [
+  "mypy>=1.11",
+  "types-requests",
+  "types-PyYAML",
+  "pytest>=8",
+  "pytest-cov",
+  "ruff>=0.6",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
