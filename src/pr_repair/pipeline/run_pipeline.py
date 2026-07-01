@@ -65,10 +65,12 @@ def run_pipeline(config: AppConfig) -> int:
         return _run_pipeline_traced(config, repo_root, repo_context, store, runtime_manager, run_state)
     finally:
         recorder.stop()
+        # Trace emission is best-effort and must never mask the run's real exit code.
+        # StateStore.write_json wraps OSError as StateStoreError, so catch broadly.
         try:
             store.write_json("run_trace.json", recorder.to_list())
-        except OSError:
-            log_event("run_trace_write_failed")
+        except Exception as exc:  # noqa: BLE001 - best-effort trace write
+            log_event("run_trace_write_failed", error=str(exc))
 
 
 def _run_pipeline_traced(

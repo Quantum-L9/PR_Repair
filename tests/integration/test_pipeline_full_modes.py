@@ -192,6 +192,34 @@ def test_protected_path_manual_finding_still_gates_plan(monkeypatch, tmp_path: P
     assert [f.finding_id for f in plan.targeted_findings] == ["af-88"]
 
 
+def test_trace_write_failure_does_not_mask_exit_code(tmp_path: Path, monkeypatch) -> None:
+    from pr_repair.errors import StateStoreError
+    from pr_repair.state_store import StateStore
+
+    (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    original = StateStore.write_json
+
+    def flaky_write(self, name, payload):
+        if name == "run_trace.json":
+            raise StateStoreError("disk full")
+        return original(self, name, payload)
+
+    monkeypatch.setattr(StateStore, "write_json", flaky_write)
+
+    config = AppConfig(
+        github_token="token", github_repository="owner/repo",
+        payload_path=tmp_path / "missing.json",
+        verify_command=["python", "-c", "print('ok')"], mode=ExecutionMode.dry_run,
+        output_dir=tmp_path / "runtime", write_ceiling=TierLevel.t1,
+    )
+
+    # StateStoreError from the best-effort trace write must be swallowed; the real
+    # fail-closed exit code (2) is preserved.
+    assert run_pipeline(config) == 2
+
+
 def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
