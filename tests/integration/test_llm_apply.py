@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from pr_repair.config import AppConfig
 from pr_repair.llm.contract import ProposedPatch
 from pr_repair.repair.llm_apply import apply_llm_proposals, is_apply_eligible
@@ -141,6 +143,23 @@ def test_rollback_preserves_prior_autofix_changes(tmp_path: Path) -> None:
     assert result is not None and result.status == "rolled_back_verification_failed"
     assert (repo / "a.py").read_text() == "AUTOFIXED\n"  # autofix change preserved
     assert (repo / "f.py").read_text() == "OLD\n"  # llm change rolled back
+
+
+def test_apply_rolls_back_on_exception(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    # An out-of-range range makes apply_patch_instructions raise mid-apply.
+    bad = ProposedPatch(
+        finding_id="mr-1", file_path="f.py", abstained=False,
+        instruction={"op": "replace_range", "file_path": "f.py", "line_start": 50,
+                     "line_end": 60, "replacement": "x", "finding_id": "mr-1"},
+    )
+
+    with pytest.raises(ValueError):
+        apply_llm_proposals(_pr(), [(_finding(), bad)], _config(tmp_path, _CHECK_GOOD), repo)
+
+    # Rolled back like the deterministic lane: tree clean, file unchanged.
+    assert (repo / "f.py").read_text() == "OLD\n"
+    assert _run_porcelain(repo) == ""
 
 
 def test_no_applicable_returns_none(tmp_path: Path) -> None:

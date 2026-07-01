@@ -90,45 +90,53 @@ def apply_llm_proposals(
     snapshot = snapshot_worktree(repo_root)
     attempt = 0
 
-    while True:
-        modified = apply_patch_instructions(instructions, repo_root)
-        log_event("llm_patch_applied", pr_number=pr_ref.pr_number, attempt=attempt, modified_files=modified)
-        verification = run_verification(config.verify_command, repo_root)
-        log_event(
-            "llm_verification_complete",
-            pr_number=pr_ref.pr_number,
-            attempt=attempt,
-            success=verification.success,
-            exit_code=verification.exit_code,
-        )
+    try:
+        while True:
+            modified = apply_patch_instructions(instructions, repo_root)
+            log_event("llm_patch_applied", pr_number=pr_ref.pr_number, attempt=attempt, modified_files=modified)
+            verification = run_verification(config.verify_command, repo_root)
+            log_event(
+                "llm_verification_complete",
+                pr_number=pr_ref.pr_number,
+                attempt=attempt,
+                success=verification.success,
+                exit_code=verification.exit_code,
+            )
 
-        if verification.success:
-            push_result = None
-            if config.allow_push and config.mode is ExecutionMode.repair_verify_and_push:
-                commit_sha = commit_changes(
-                    f"fix(pr-{pr_ref.pr_number}): apply LLM-assisted repair (verified)",
-                    repo_root,
+            if verification.success:
+                push_result = None
+                if config.allow_push and config.mode is ExecutionMode.repair_verify_and_push:
+                    commit_sha = commit_changes(
+                        f"fix(pr-{pr_ref.pr_number}): apply LLM-assisted repair (verified)",
+                        repo_root,
+                    )
+                    push_changes(pr_ref.head_branch, repo_root)
+                    push_result = f"pushed:{commit_sha}"
+                return _execution(
+                    pr_ref, config, "completed", modified, verification, attempt, push_result
                 )
-                push_changes(pr_ref.head_branch, repo_root)
-                push_result = f"pushed:{commit_sha}"
-            return _execution(
-                pr_ref, config, "completed", modified, verification, attempt, push_result
-            )
 
+            restore_worktree(snapshot, repo_root)
+            log_event("llm_repair_rolled_back", pr_number=pr_ref.pr_number, attempt=attempt)
+
+            if attempt >= MAX_RETRIES or regenerate is None:
+                return _execution(
+                    pr_ref, config, "rolled_back_verification_failed", [], verification, attempt, None
+                )
+
+            attempt += 1
+            instructions = _instructions(regenerate(verification.stderr))
+            if not instructions:
+                return _execution(
+                    pr_ref, config, "rolled_back_no_retry_patch", [], verification, attempt, None
+                )
+    except Exception:
+        # A raise from apply/verify/regenerate (unsupported op, exact-match mismatch,
+        # missing file, ...) must not leave the tree dirty -- roll back like the
+        # deterministic lane, then surface the error.
         restore_worktree(snapshot, repo_root)
-        log_event("llm_repair_rolled_back", pr_number=pr_ref.pr_number, attempt=attempt)
-
-        if attempt >= MAX_RETRIES or regenerate is None:
-            return _execution(
-                pr_ref, config, "rolled_back_verification_failed", [], verification, attempt, None
-            )
-
-        attempt += 1
-        instructions = _instructions(regenerate(verification.stderr))
-        if not instructions:
-            return _execution(
-                pr_ref, config, "rolled_back_no_retry_patch", [], verification, attempt, None
-            )
+        log_event("llm_repair_rolled_back", pr_number=pr_ref.pr_number, attempt=attempt, reason="exception")
+        raise
 
 
 def _instructions(applicable: list[Proposal]) -> list[dict[str, object]]:

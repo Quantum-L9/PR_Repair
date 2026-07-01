@@ -94,7 +94,10 @@ def restore_worktree(snapshot: str | None, repo_root: Path | None = None) -> Non
     _run_git(["reset", "--hard", "HEAD"], root)
     _run_git(["clean", "-fd"], root)
     if snapshot:
-        _run_git(["stash", "apply", snapshot], root)
+        # --index restores the staged/index state too; `git stash create` captures
+        # both working tree and index, so without it any pre-existing staged
+        # changes from a prior lane would be silently dropped after rollback.
+        _run_git(["stash", "apply", "--index", snapshot], root)
 
 
 def _run_git(args: list[str], repo_root: Path) -> subprocess.CompletedProcess[str]:
