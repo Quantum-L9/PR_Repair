@@ -138,6 +138,60 @@ def test_high_severity_manual_finding_does_not_gate_autofix(monkeypatch, tmp_pat
     assert plan.risk_level == "low"
 
 
+def test_protected_path_manual_finding_still_gates_plan(monkeypatch, tmp_path: Path) -> None:
+    from pr_repair.classification.classifier import classify_findings as real_classify
+    from pr_repair.types import ReviewDisposition
+
+    (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    payload_path = tmp_path / "agent_review_payload.json"
+    _write_payload(payload_path, pr_number=88)
+
+    # Mark the manual finding as touching a protected path.
+    def classify_with_protected(findings, ctx):
+        out = []
+        for finding in real_classify(findings, ctx):
+            if finding.review_disposition is ReviewDisposition.manual_review:
+                out.append(finding.model_copy(update={"protected_path": True}))
+            else:
+                out.append(finding)
+        return out
+
+    import sys
+
+    import pr_repair.pipeline.run_pipeline  # noqa: F401 - ensure module import
+
+    rp_module = sys.modules["pr_repair.pipeline.run_pipeline"]
+    monkeypatch.setattr(rp_module, "classify_findings", classify_with_protected)
+
+    captured = {}
+
+    def capture(plan, cfg, repo_root=None):
+        captured["plan"] = plan
+        return RepairExecution(
+            execution_id="e", pr_ref=plan.pr_ref, plan_id=plan.plan_id,
+            mode=plan.execution_mode, status="approval_required",
+        )
+
+    monkeypatch.setattr("pr_repair.pipeline.run_pipeline.execute_repair_plan", capture)
+
+    assert run_pipeline(
+        AppConfig(
+            github_token="t", github_repository="owner/repo", payload_path=payload_path,
+            verify_command=["python", "-c", "print('ok')"], mode=ExecutionMode.repair_and_verify,
+            output_dir=tmp_path / "runtime", write_ceiling=TierLevel.t1,
+        )
+    ) == 0
+
+    plan = captured["plan"]
+    # Protected-path gating preserved: a protected manual finding raises the gate...
+    assert plan.protected_paths_touched is True
+    assert plan.approval_required is True
+    assert plan.executable is False
+    # ...but the protected manual finding is never a repair target.
+    assert [f.finding_id for f in plan.targeted_findings] == ["af-88"]
+
+
 def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
