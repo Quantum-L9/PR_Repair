@@ -37,8 +37,9 @@ from pr_repair.planning.llm_proposer import propose_repairs
 from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.priorities import SOURCE_PRIORITY
 from pr_repair.repair.repair_executor import execute_repair_plan
-from pr_repair.routing.fix_matrix import FixStrategyRegistry, load_fix_matrix
+from pr_repair.routing.fix_matrix import FixStrategy, FixStrategyRegistry, load_fix_matrix
 from pr_repair.repo_context.loader import load_repo_context
+from pr_repair.state_store import StateStore
 from pr_repair.tools.base import ToolAdapter
 from pr_repair.tools.responder import ResponderResult, ToolThreadResponder
 from pr_repair.types import (
@@ -81,6 +82,7 @@ def run_tool_actuation(
     repo_context = load_repo_context(repo_root, write_ceiling=config.write_ceiling)
     responder = responder or ToolThreadResponder(connector, post_comment=config.post_comment)
     registry = registry or load_fix_matrix(config.fix_matrix_path)
+    store = StateStore(config.output_dir)
 
     items = adapter.to_payload_findings(adapter.read_findings(pr_ref, connector))
     findings = [_to_finding(item, pr_ref) for item in items]
@@ -115,17 +117,19 @@ def run_tool_actuation(
         applied = set(execution.modified_files) if execution is not None else set()
         commit_sha = _commit_sha(execution.push_result) if execution is not None else None
         for finding in route.autofix:
+            strategy = strategies[finding.finding_id]
             if execution is not None and execution.status == "completed" and finding.file_path in applied:
-                responses.append(
-                    responder.respond(pr_ref, finding, "fixed", commit_sha=commit_sha)
-                )
+                result = responder.respond(pr_ref, finding, "fixed", commit_sha=commit_sha)
             else:
-                responses.append(
-                    responder.respond(
-                        pr_ref, finding, "justified_skip",
-                        detail="Deterministic autofix did not apply (gated or verification failed); left for review.",
-                    )
+                result = responder.respond(
+                    pr_ref, finding, "justified_skip",
+                    detail="Deterministic autofix did not apply (gated or verification failed); left for review.",
                 )
+            responses.append(result)
+            _write_fix_report(
+                store, pr_ref, finding, result, strategy,
+                resolved=None, execution=execution, commit_sha=commit_sha,
+            )
 
     # Manual lane: resolve each finding to a model tier/depth (EIE-style), emit an
     # auditable model_resolved trace event, then request bounded LLM proposals.
@@ -161,18 +165,19 @@ def run_tool_actuation(
             resolved = resolved_by_id[finding.finding_id]
             if proposal is not None and not proposal.abstained:
                 tier_note = f" (router tier: {resolved.tier.value}, depth: {resolved.depth.value})"
-                responses.append(
-                    responder.respond(
-                        pr_ref, finding, "proposed", detail=f"{proposal.rationale}{tier_note}"
-                    )
+                result = responder.respond(
+                    pr_ref, finding, "proposed", detail=f"{proposal.rationale}{tier_note}"
                 )
             else:
-                responses.append(
-                    responder.respond(
-                        pr_ref, finding, "justified_skip",
-                        detail="No bounded automated fix available; needs human review.",
-                    )
+                result = responder.respond(
+                    pr_ref, finding, "justified_skip",
+                    detail="No bounded automated fix available; needs human review.",
                 )
+            responses.append(result)
+            _write_fix_report(
+                store, pr_ref, finding, result, strategies[finding.finding_id],
+                resolved=resolved, execution=None, commit_sha=None,
+            )
 
     return DispatchResult(
         handled=True,
@@ -220,3 +225,59 @@ def _commit_sha(push_result: str | None) -> str | None:
     if push_result and push_result.startswith("pushed:"):
         return push_result.split(":", 1)[1]
     return None
+
+
+def _write_fix_report(
+    store: StateStore,
+    pr_ref: PRRef,
+    finding: Finding,
+    result: ResponderResult,
+    strategy: FixStrategy,
+    *,
+    resolved: Any,
+    execution: Any,
+    commit_sha: str | None,
+) -> None:
+    """Emit the auditable per-finding fix record: prs/pr_<n>/fixes/<id>.json.
+
+    Captures the change, the strategy (deterministic handler or resolved LLM
+    tier/depth + resolution_reason), verification, the thread reply, and outcome.
+    """
+    report: dict[str, Any] = {
+        "finding_id": finding.finding_id,
+        "tool": finding.tool,
+        "category": finding.category,
+        "file_path": finding.file_path,
+        "line_start": finding.line_start,
+        "line_end": finding.line_end,
+        "outcome": "fixed" if result.resolved else ("proposed" if "Proposal" in result.body else "justified_skip"),
+        "strategy": {
+            "kind": strategy.kind,
+            "handler": strategy.handler,
+            "matched_by": strategy.matched_by,
+        },
+        "change": {"replacement_text": finding.replacement_text} if finding.replacement_text else None,
+        "commit_sha": commit_sha,
+        "thread": {
+            "thread_id": finding.thread_id,
+            "comment_id": finding.comment_id,
+            "replied": result.replied,
+            "resolved": result.resolved,
+            "reply_body": result.body,
+        },
+    }
+    if resolved is not None:
+        report["resolved_llm"] = {
+            "tier": resolved.tier.value,
+            "model": resolved.model,
+            "depth": resolved.depth.value,
+            "effort": resolved.effort,
+            "estimated_cost": resolved.estimated_cost,
+            "resolution_reason": resolved.resolution_reason,
+        }
+    if execution is not None and execution.verification_result is not None:
+        report["verification"] = {
+            "success": execution.verification_result.success,
+            "exit_code": execution.verification_result.exit_code,
+        }
+    store.write_json(f"prs/pr_{pr_ref.pr_number}/fixes/{finding.finding_id}.json", report)

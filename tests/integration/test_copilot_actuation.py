@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from pr_repair.config import AppConfig
@@ -78,6 +79,15 @@ def test_copilot_suggestion_is_fixed_replied_and_resolved(monkeypatch, tmp_path:
     assert "Fixed" in conn.replies[0][1] and "abc123" in conn.replies[0][1]
     assert conn.resolved == ["PRRT_fix"]
 
+    # Phase 5: per-fix audit artifact.
+    report = json.loads(
+        (tmp_path / "runtime" / "prs" / "pr_7" / "fixes" / "copilot-5001.json").read_text(encoding="utf-8")
+    )
+    assert report["outcome"] == "fixed"
+    assert report["commit_sha"] == "abc123"
+    assert report["change"]["replacement_text"] == "TransportPacket"
+    assert report["thread"]["resolved"] is True
+
 
 def test_plain_copilot_comment_is_justified_not_resolved(monkeypatch, tmp_path: Path) -> None:
     (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
@@ -91,3 +101,12 @@ def test_plain_copilot_comment_is_justified_not_resolved(monkeypatch, tmp_path: 
     assert conn.replies[0][0] == 6002
     assert "human review" in conn.replies[0][1].lower()
     assert conn.resolved == []  # never resolve a thread we didn't fix
+
+    # Phase 5: the fix report captures the resolved LLM tier/depth + resolution_reason.
+    report = json.loads(
+        (tmp_path / "runtime" / "prs" / "pr_7" / "fixes" / "copilot-6002.json").read_text(encoding="utf-8")
+    )
+    assert report["outcome"] == "justified_skip"
+    assert report["resolved_llm"]["tier"] in {"haiku", "mistral-large", "opus", "opus-deep"}
+    assert report["resolved_llm"]["resolution_reason"]
+    assert report["resolved_llm"]["estimated_cost"] > 0.0

@@ -1,0 +1,18 @@
+# Convergence — Per-Tool Review Actuation Layer
+converged: true
+stop_condition: "all hard gates pass; no material defects remain; two consecutive passes materially identical"
+passes_run: 6            # one improvement pass folded into each phase
+final_status: IMPROVED_EXECUTION_READY
+
+done_checklist:
+  ci_green_on_final_branch: true          # uv run pytest -q => 171 passed; ruff clean
+  all_phase_prs_have_proof: true          # #8–#12 + Phase 5 PR, each with a proof artifact
+  copilot_e2e_integration_passes: true    # apply + reply + resolve
+  all_model_tiers_reachable: true         # test_model_router_reachability
+  cost_and_reason_in_trace: true          # model_resolved event
+  per_finding_fix_artifact: true          # prs/pr_<n>/fixes/<id>.json
+  no_stubs_or_placeholders: true
+  agent_md_key_module_map_updated: true
+  fix_matrix_version_present: true
+  shim_adr_committed_before_shim_change: true   # ADR 0001 @ 5833f14
+  audit_package_present: true
