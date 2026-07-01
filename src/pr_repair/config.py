@@ -37,6 +37,7 @@ class AppConfig(BaseModel):
     output_dir: Path = Path("runtime/pr_repair")
     include_drafts: bool = False
     write_ceiling: TierLevel = TierLevel.t1
+    fix_matrix_path: Path = Path("contracts/fix_matrix.yaml")
 
     @field_validator("github_repository")
     @classmethod
@@ -106,6 +107,7 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
         output_dir=Path(os.getenv("PR_FIX_OUTPUT_DIR", "runtime/pr_repair")),
         include_drafts=os.getenv("PR_FIX_INCLUDE_DRAFTS", "0") == "1",
         write_ceiling=write_ceiling,
+        fix_matrix_path=Path(os.getenv("PR_FIX_MATRIX_PATH", "contracts/fix_matrix.yaml")),
     )
 
 
