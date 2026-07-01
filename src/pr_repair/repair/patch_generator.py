@@ -52,29 +52,29 @@ def generate_patch_instructions(
 
 def _build_autofix_instruction(finding: Finding, lines: list[str] | None) -> dict[str, object] | None:
     assert finding.line_start is not None  # guarded by caller
+    # A deterministic autofix must carry an exact on-disk guard. If the file was not
+    # readable at generation time we cannot capture one, so we skip the patch rather
+    # than emit an unguarded edit or couple success to a human-readable message
+    # (no fuzzy matching, ever).
+    if lines is None:
+        return None
     line_start = finding.line_start
     line_end = finding.line_end if finding.line_end is not None else line_start
-    if lines is not None and (line_start < 1 or line_end > len(lines)):
+    if line_start < 1 or line_end > len(lines):
         return None
 
     if line_end == line_start:
-        expected = lines[line_start - 1] if lines is not None else finding.message
         return {
             "op": "replace_line",
             "file_path": finding.file_path,
             "line_number": line_start,
-            "expected": expected,
+            "expected": lines[line_start - 1],
             "replacement": finding.replacement_text,
             "finding_id": finding.finding_id,
             "rule_id": finding.rule_id,
             "category": finding.category,
         }
 
-    # A multi-line replacement must carry an exact on-disk block guard. If the file
-    # was not readable at generation time we cannot capture it, so we skip the patch
-    # rather than emit a guard-less range edit (no fuzzy matching, ever).
-    if lines is None:
-        return None
     return {
         "op": "replace_range",
         "file_path": finding.file_path,
