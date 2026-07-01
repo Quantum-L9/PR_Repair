@@ -30,6 +30,7 @@ from typing import Any
 from pr_repair.classification.classifier import classify_findings
 from pr_repair.config import AppConfig
 from pr_repair.llm import build_llm_client
+from pr_repair.llm.model_router import FindingSignals, resolve_for_finding
 from pr_repair.logging import log_event
 from pr_repair.normalization.fingerprint import build_finding_fingerprint
 from pr_repair.planning.llm_proposer import propose_repairs
@@ -126,17 +127,40 @@ def run_tool_actuation(
                     )
                 )
 
-    # Manual lane: bounded LLM proposals (surfaced, not applied here).
+    # Manual lane: resolve each finding to a model tier/depth (EIE-style), emit an
+    # auditable model_resolved trace event, then request bounded LLM proposals.
     if route.manual:
+        resolved_by_id = {}
+        for finding in route.manual:
+            resolved = resolve_for_finding(
+                finding,
+                strategies[finding.finding_id],
+                FindingSignals(
+                    protected_path=finding.protected_path,
+                    contract_ids=tuple(finding.contract_ids),
+                    tool=finding.tool,
+                ),
+            )
+            resolved_by_id[finding.finding_id] = resolved
+            log_event(
+                "model_resolved",
+                finding_id=finding.finding_id,
+                tier=resolved.tier.value,
+                depth=resolved.depth.value,
+                effort=resolved.effort,
+                estimated_cost=resolved.estimated_cost,
+                resolution_reason=resolved.resolution_reason,
+            )
         proposals = propose_repairs(
-            route.manual, build_llm_client(config), repo_root, config.llm_client_id
+            route.manual, build_llm_client(config), repo_root, config.llm_client_id,
+            resolved_by_id=resolved_by_id,
         )
         by_id = {p.finding_id: p for p in proposals}
         for finding in route.manual:
             proposal = by_id.get(finding.finding_id)
-            strategy = strategies[finding.finding_id]
+            resolved = resolved_by_id[finding.finding_id]
             if proposal is not None and not proposal.abstained:
-                tier_note = f" (router tier: {strategy.tier}, depth: {strategy.depth})" if strategy.tier else ""
+                tier_note = f" (router tier: {resolved.tier.value}, depth: {resolved.depth.value})"
                 responses.append(
                     responder.respond(
                         pr_ref, finding, "proposed", detail=f"{proposal.rationale}{tier_note}"

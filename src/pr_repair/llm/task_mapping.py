@@ -20,10 +20,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pr_repair.llm.contract import LLMRequest
 from pr_repair.redaction import redact_secrets
 from pr_repair.types import Finding, Severity
+
+if TYPE_CHECKING:
+    from pr_repair.llm.model_router import ResolvedLLMConfig
 
 _SEVERITY_TO_COMPLEXITY = {
     Severity.critical: "critical",
@@ -58,11 +62,14 @@ def build_request(
     repo_root: Path,
     client_id: str,
     feedback: str | None = None,
+    resolved: "ResolvedLLMConfig | None" = None,
 ) -> LLMRequest:
     """Build a bounded code-repair request for a single manual-review finding.
 
     ``feedback`` carries the verification stderr from a failed prior attempt so the
-    model can correct itself on the single allowed retry.
+    model can correct itself on the single allowed retry. ``resolved`` carries the
+    model_router tier/depth/effort hints (ADR 0001) when tier-aware routing is in
+    effect; otherwise the router picks the model from complexity alone.
     """
     return LLMRequest(
         finding_id=finding.finding_id,
@@ -71,7 +78,10 @@ def build_request(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=_build_user_prompt(finding, repo_root, feedback),
         client_id=client_id,
-        expected_output_tokens=512,
+        expected_output_tokens=resolved.max_tokens if resolved is not None else 512,
+        depth=resolved.depth.value if resolved is not None else None,
+        effort=resolved.effort if resolved is not None else None,
+        tier=resolved.model if resolved is not None else None,
     )
 
 

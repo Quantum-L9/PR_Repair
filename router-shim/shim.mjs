@@ -50,12 +50,17 @@ async function runOne(router, req) {
     router.initClient(clientId);
     seenClients.add(clientId);
   }
+  // Optional tier/depth/effort hints (ADR 0001) relayed as-is. The shim does not
+  // interpret them; L9LLMRouter.execute is the acceptance authority.
   const task = {
     type: TASK_TYPE[req.task_type] ?? TaskType.CODE_GENERATION,
     complexity: COMPLEXITY[req.complexity] ?? TaskComplexity.MEDIUM,
     expectedOutputTokens: req.expected_output_tokens ?? undefined,
     requiresReasoning: true,
     clientId,
+    depth: req.depth ?? undefined,
+    reasoningEffort: req.effort ?? undefined,
+    modelTier: req.tier ?? undefined,
   };
   try {
     const res = await router.execute(task, req.system_prompt, req.user_prompt);
