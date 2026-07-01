@@ -82,7 +82,8 @@ def test_table_reflects_applied_autofix_and_passing_verification() -> None:
         ),
     )
     finding = _finding(
-        category="lint_failure", contract_ids=[], review_disposition=ReviewDisposition.autofix
+        pr_number=7, category="lint_failure", contract_ids=[],
+        review_disposition=ReviewDisposition.autofix,
     )
     comment = build_pr_comment(execution, [finding])
 
@@ -95,7 +96,7 @@ def test_table_reflects_manual_proposal() -> None:
         execution_id="exec-9", pr_ref=_pr(9), plan_id="plan-9",
         mode=ExecutionMode.dry_run, status="planned_only",
     )
-    finding = _finding(contract_ids=[], review_disposition=ReviewDisposition.manual_review)
+    finding = _finding(pr_number=9, contract_ids=[], review_disposition=ReviewDisposition.manual_review)
     proposal = ProposedPatch(finding_id="f-61", file_path="engine/module.py", abstained=False)
     comment = build_pr_comment(execution, [finding], [proposal])
 
@@ -107,6 +108,7 @@ class _FakeConnector:
         self._existing = existing
         self.posted = []
         self.updated = []
+        self.deleted = []
 
     def get_issue_comments(self, owner, repo, pr_number):
         return self._existing
@@ -118,6 +120,9 @@ class _FakeConnector:
     def update_issue_comment(self, owner, repo, comment_id, body):
         self.updated.append((comment_id, body))
         return {"id": comment_id, "body": body}
+
+    def delete_issue_comment(self, owner, repo, comment_id):
+        self.deleted.append(comment_id)
 
 
 def test_upsert_creates_when_no_marker_present() -> None:
@@ -140,6 +145,23 @@ def test_upsert_updates_existing_marked_comment() -> None:
     upsert_implementer_comment(connector, _pr(), body)
 
     assert connector.updated == [(42, body)]
+    assert connector.posted == []
+
+
+def test_upsert_deletes_duplicate_marker_comments() -> None:
+    connector = _FakeConnector(
+        existing=[
+            {"id": 10, "body": f"{MARKER}\nfirst"},
+            {"id": 1, "body": "human comment"},
+            {"id": 20, "body": f"{MARKER}\nolder duplicate"},
+        ]
+    )
+    body = f"{MARKER}\nnew table"
+    upsert_implementer_comment(connector, _pr(), body)
+
+    # First marker comment updated, the duplicate deleted -> exactly one remains.
+    assert connector.updated == [(10, body)]
+    assert connector.deleted == [20]
     assert connector.posted == []
 
 

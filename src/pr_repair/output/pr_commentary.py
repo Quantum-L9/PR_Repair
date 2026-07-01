@@ -41,6 +41,10 @@ class _CommentConnector(Protocol):
         self, repo_owner: str, repo_name: str, comment_id: int, body: str
     ) -> dict[str, object]: ...
 
+    def delete_issue_comment(
+        self, repo_owner: str, repo_name: str, comment_id: int
+    ) -> None: ...
+
 
 def build_pr_comment(
     execution: RepairExecution,
@@ -90,15 +94,21 @@ def upsert_implementer_comment(
         raise ValueError(msg)
 
     existing = connector.get_issue_comments(pr.repo_owner, pr.repo_name, pr.pr_number)
+    marker_ids: list[int] = []
     for comment in existing:
-        comment_body = comment.get("body")
-        if isinstance(comment_body, str) and comment_body.startswith(MARKER):
-            comment_id = comment.get("id")
-            if isinstance(comment_id, int):
-                return connector.update_issue_comment(
-                    pr.repo_owner, pr.repo_name, comment_id, body
-                )
-    return connector.post_pr_comment(pr.repo_owner, pr.repo_name, pr.pr_number, body)
+        body_value = comment.get("body")
+        id_value = comment.get("id")
+        if isinstance(body_value, str) and body_value.startswith(MARKER) and isinstance(id_value, int):
+            marker_ids.append(id_value)
+    if not marker_ids:
+        return connector.post_pr_comment(pr.repo_owner, pr.repo_name, pr.pr_number, body)
+
+    # Converge to exactly one: update the first marker comment and delete any
+    # historical duplicates so the "single marker-keyed comment" contract holds.
+    primary_id, *duplicate_ids = marker_ids
+    for duplicate_id in duplicate_ids:
+        connector.delete_issue_comment(pr.repo_owner, pr.repo_name, duplicate_id)
+    return connector.update_issue_comment(pr.repo_owner, pr.repo_name, primary_id, body)
 
 
 def _table_row(
