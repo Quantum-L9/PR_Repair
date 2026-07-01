@@ -1,0 +1,52 @@
+{
+  "_source": "Real GitHub Copilot review-thread shape captured from Quantum-L9/PR_Repair PR #7 (get_review_comments). Bodies are real Copilot comments (no secrets); isResolved reflects the actionable state at review time. This is the connector.get_review_threads() shape the CopilotAdapter consumes.",
+  "tool": "copilot",
+  "pr": {
+    "repo_owner": "Quantum-L9",
+    "repo_name": "PR_Repair",
+    "pr_number": 7,
+    "title": "CI enablement pack",
+    "head_branch": "claude/pr-repair-ci-enablement",
+    "base_branch": "main",
+    "head_sha": "3b394c6aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "author": "cryptoxdog",
+    "is_draft": false,
+    "labels": []
+  },
+  "threads": [
+    {
+      "id": "PRRT_kwDOSo0K5M6Ncncl",
+      "isResolved": false,
+      "path": ".github/workflows/pr-checks.yml",
+      "line": 29,
+      "comments": {
+        "nodes": [
+          {
+            "id": "PRRC_kwDOSo0K5M5Ncncl",
+            "databaseId": 3502779796,
+            "body": "The workflow-level `permissions` is set to only `contents: read`, which can prevent `actions/upload-artifact` and `actions/download-artifact` from working (artifact APIs require `actions` scope). This will break coverage upload/download and, in turn, Sonar coverage ingestion.",
+            "author": { "login": "copilot-pull-request-reviewer" },
+            "url": "https://github.com/Quantum-L9/PR_Repair/pull/7#discussion_r3502779796"
+          }
+        ]
+      }
+    },
+    {
+      "id": "PRRT_kwDOSo0K5M6NcndH",
+      "isResolved": true,
+      "path": ".github/workflows/pr-checks.yml",
+      "line": 127,
+      "comments": {
+        "nodes": [
+          {
+            "id": "PRRC_kwDOSo0K5M5NcndH",
+            "databaseId": 3502779841,
+            "body": "`actions/download-artifact` extracts into a subdirectory named after the artifact by default (here: `coverage/`). With `sonar.python.coverage.reportPaths=coverage.xml`, Sonar is likely to miss coverage unless the artifact is downloaded into the repo root.",
+            "author": { "login": "copilot-pull-request-reviewer" },
+            "url": "https://github.com/Quantum-L9/PR_Repair/pull/7#discussion_r3502779841"
+          }
+        ]
+      }
+    }
+  ]
+}
