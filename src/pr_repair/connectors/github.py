@@ -110,6 +110,7 @@ class GitHubConnector:
                   comments(first: 20) {
                     nodes {
                       id
+                      databaseId
                       body
                       author { login }
                       url
