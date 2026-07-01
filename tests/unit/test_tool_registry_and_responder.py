@@ -11,7 +11,8 @@ def _event(tool: str | None) -> NormalizedPREvent:
 
 def test_registry_routes_copilot_and_rejects_unknown() -> None:
     assert isinstance(adapter_for_event(_event("copilot")), CopilotAdapter)
-    assert adapter_for_event(_event("sonarcloud")) is None  # not registered until Phase 4
+    assert adapter_for_event(_event("sonarcloud")) is not None  # registered in Phase 4
+    assert adapter_for_event(_event("nonesuch")) is None  # unknown tool
     assert adapter_for_event(_event(None)) is None
     assert adapter_for_tool("copilot") is not None
 
