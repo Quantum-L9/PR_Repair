@@ -1,0 +1,177 @@
+# --- L9_META ---
+# l9_schema: 1
+# origin: pr_repair_pipeline
+# engine: pr_repair
+# layer: [orchestration]
+# tags: [per-tool, dispatch, actuation]
+# owner: platform
+# status: active
+# --- /L9_META ---
+
+"""Per-tool actuation dispatcher.
+
+Ties a tool adapter to the existing bifurcated pipeline without modifying the
+PRLoopOrchestrator state machine:
+
+    adapter.read_findings → adapter.to_payload_findings → Finding
+      → classify → route → (autofix: plan+execute | manual: propose)
+      → ToolThreadResponder replies + resolves per thread.
+
+Read-only unless ``config.mode`` permits repair; the responder only writes when
+``config.post_comment`` is set.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from pr_repair.classification.classifier import classify_findings
+from pr_repair.config import AppConfig
+from pr_repair.llm import build_llm_client
+from pr_repair.logging import log_event
+from pr_repair.normalization.fingerprint import build_finding_fingerprint
+from pr_repair.orchestration.router import route_findings
+from pr_repair.planning.llm_proposer import propose_repairs
+from pr_repair.planning.repair_planner import build_repair_plan
+from pr_repair.priorities import SOURCE_PRIORITY
+from pr_repair.repair.repair_executor import execute_repair_plan
+from pr_repair.repo_context.loader import load_repo_context
+from pr_repair.tools.base import ToolAdapter
+from pr_repair.tools.responder import ResponderResult, ToolThreadResponder
+from pr_repair.types import (
+    ExecutionMode,
+    Finding,
+    PRRef,
+    ReviewDisposition,
+    Severity,
+    SourceName,
+)
+
+_REPAIR_MODES = {ExecutionMode.repair_and_verify, ExecutionMode.repair_verify_and_push}
+
+
+@dataclass
+class DispatchResult:
+    handled: bool
+    tool: str | None = None
+    autofix: int = 0
+    manual: int = 0
+    responses: list[ResponderResult] = field(default_factory=list)
+
+
+def run_tool_actuation(
+    adapter: ToolAdapter,
+    pr_ref: PRRef,
+    config: AppConfig,
+    connector: Any,
+    repo_root: Path,
+    responder: ToolThreadResponder | None = None,
+) -> DispatchResult:
+    """Run one tool's findings through the pipeline and respond per thread."""
+    repo_context = load_repo_context(repo_root, write_ceiling=config.write_ceiling)
+    responder = responder or ToolThreadResponder(connector, post_comment=config.post_comment)
+
+    items = adapter.to_payload_findings(adapter.read_findings(pr_ref, connector))
+    findings = [_to_finding(item, pr_ref) for item in items]
+    if not findings:
+        return DispatchResult(handled=True, tool=adapter.tool_name)
+
+    classified = classify_findings(findings, repo_context)
+    route = route_findings(classified)
+    log_event(
+        "tool_actuation_routed",
+        tool=adapter.tool_name,
+        pr_number=pr_ref.pr_number,
+        autofix=len(route.autofix),
+        manual=len(route.manual),
+    )
+
+    responses: list[ResponderResult] = []
+
+    # Deterministic autofix lane: plan + execute (verify/rollback) when permitted.
+    if route.autofix:
+        plan = build_repair_plan(pr_ref, route.autofix, config)
+        execution = execute_repair_plan(plan, config, repo_root) if config.mode in _REPAIR_MODES else None
+        applied = set(execution.modified_files) if execution is not None else set()
+        commit_sha = _commit_sha(execution.push_result) if execution is not None else None
+        for finding in route.autofix:
+            if execution is not None and execution.status == "completed" and finding.file_path in applied:
+                responses.append(
+                    responder.respond(pr_ref, finding, "fixed", commit_sha=commit_sha)
+                )
+            else:
+                responses.append(
+                    responder.respond(
+                        pr_ref, finding, "justified_skip",
+                        detail="Deterministic autofix did not apply (gated or verification failed); left for review.",
+                    )
+                )
+
+    # Manual lane: bounded LLM proposals (surfaced, not applied here).
+    if route.manual:
+        proposals = propose_repairs(
+            route.manual, build_llm_client(config), repo_root, config.llm_client_id
+        )
+        by_id = {p.finding_id: p for p in proposals}
+        for finding in route.manual:
+            proposal = by_id.get(finding.finding_id)
+            if proposal is not None and not proposal.abstained:
+                responses.append(
+                    responder.respond(pr_ref, finding, "proposed", detail=proposal.rationale)
+                )
+            else:
+                responses.append(
+                    responder.respond(
+                        pr_ref, finding, "justified_skip",
+                        detail="No bounded automated fix available; needs human review.",
+                    )
+                )
+
+    return DispatchResult(
+        handled=True,
+        tool=adapter.tool_name,
+        autofix=len(route.autofix),
+        manual=len(route.manual),
+        responses=responses,
+    )
+
+
+def _to_finding(item: dict[str, Any], pr_ref: PRRef) -> Finding:
+    disposition = (
+        ReviewDisposition.autofix
+        if item.get("_disposition") == "autofix"
+        else ReviewDisposition.manual_review
+    )
+    is_autofix = disposition is ReviewDisposition.autofix
+    finding = Finding(
+        finding_id=str(item["finding_id"]),
+        pr_number=pr_ref.pr_number,
+        source_name=SourceName.agent_review,
+        source_priority=SOURCE_PRIORITY[SourceName.agent_review],
+        severity=Severity(item.get("severity", "medium")),
+        category=str(item.get("category", "review_comment")),
+        message=str(item["message"]),
+        file_path=item.get("file_path"),
+        line_start=item.get("line_start"),
+        line_end=item.get("line_end"),
+        replacement_text=item.get("replacement_text"),
+        rule_id=item.get("rule_id"),
+        review_disposition=disposition,
+        evidence_url=item.get("evidence_url"),
+        tags=list(item.get("tags", [])),
+        tool=item.get("tool"),
+        thread_id=item.get("thread_id"),
+        comment_id=item.get("comment_id"),
+        repairable=is_autofix,
+        confidence=1.0 if is_autofix else 0.7,
+        fingerprint="pending",
+    )
+    return finding.model_copy(update={"fingerprint": build_finding_fingerprint(finding)})
+
+
+def _commit_sha(push_result: str | None) -> str | None:
+    if push_result and push_result.startswith("pushed:"):
+        return push_result.split(":", 1)[1]
+    return None
