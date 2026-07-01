@@ -46,7 +46,7 @@ def _finding(**overrides) -> Finding:
     data = {
         "finding_id": "f-1",
         "pr_number": 7,
-        "source_name": SourceName.coderabbit,
+        "source_name": SourceName.agent_review,
         "source_priority": 100,
         "severity": Severity.medium,
         "category": "lint_failure",

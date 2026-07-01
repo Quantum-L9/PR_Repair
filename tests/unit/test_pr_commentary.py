@@ -25,7 +25,7 @@ def test_build_pr_comment_uses_contract_template_for_violation() -> None:
     finding = Finding(
         finding_id="f-61",
         pr_number=61,
-        source_name=SourceName.coderabbit,
+        source_name=SourceName.agent_review,
         source_priority=100,
         severity=Severity.high,
         category="architecture_boundary_violation",

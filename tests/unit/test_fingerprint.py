@@ -6,10 +6,10 @@ def test_build_finding_fingerprint_is_deterministic() -> None:
     finding = Finding(
         finding_id="f-1",
         pr_number=10,
-        source_name=SourceName.coderabbit,
+        source_name=SourceName.agent_review,
         source_priority=100,
         severity=Severity.medium,
-        category="coderabbit_style_violation",
+        category="style_violation",
         message="Unused import detected.",
         file_path="engine/example.py",
         line_start=5,

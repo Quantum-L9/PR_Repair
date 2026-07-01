@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from pr_repair.config import load_config, resolve_verify_command
 from pr_repair.pipeline.run_pipeline import run_pipeline
@@ -30,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[mode.value for mode in ExecutionMode],
         default=None,
     )
+    run_parser.add_argument(
+        "--payload-path",
+        default=None,
+        help="Path to agent_review_payload.json (default: artifacts/agent_review_payload.json).",
+    )
 
     subparsers.add_parser("verify")
     subparsers.add_parser("learn")
@@ -42,8 +48,13 @@ def main() -> int:
     config = load_config()
 
     if args.command == "run":
+        updates: dict[str, object] = {}
         if args.mode is not None:
-            config = config.model_copy(update={"mode": ExecutionMode(args.mode)})
+            updates["mode"] = ExecutionMode(args.mode)
+        if args.payload_path is not None:
+            updates["payload_path"] = Path(args.payload_path)
+        if updates:
+            config = config.model_copy(update=updates)
         return run_pipeline(config)
 
     if args.command == "verify":

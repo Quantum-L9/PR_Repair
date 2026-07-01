@@ -11,12 +11,12 @@
 from __future__ import annotations
 
 FINDING_CATEGORIES = {
-    "coderabbit_contract_violation",
-    "coderabbit_style_violation",
-    "coderabbit_bug_risk",
-    "coderabbit_security_issue",
-    "codecov_patch_coverage_failure",
-    "codecov_missing_tests_for_changed_code",
+    "contract_violation",
+    "style_violation",
+    "bug_risk",
+    "security_issue",
+    "patch_coverage_failure",
+    "missing_tests_for_changed_code",
     "github_required_check_failure",
     "lint_failure",
     "typing_failure",
@@ -32,35 +32,35 @@ FINDING_CATEGORIES = {
 AUTO_REPAIRABLE_CATEGORIES = {
     "lint_failure",
     "typing_failure",
-    "codecov_missing_tests_for_changed_code",
+    "missing_tests_for_changed_code",
 }
 
 APPROVAL_REQUIRED_CATEGORIES = {
     "docs_consistency_failure",
     "compliance_failure",
-    "coderabbit_style_violation",
+    "style_violation",
     "architecture_boundary_violation",
     "protected_file_violation",
-    "coderabbit_security_issue",
-    "coderabbit_contract_violation",
+    "security_issue",
+    "contract_violation",
     "github_required_check_failure",
 }
 
 NEVER_AUTO_REPAIR_CATEGORIES = {
     "architecture_boundary_violation",
     "protected_file_violation",
-    "coderabbit_security_issue",
-    "coderabbit_contract_violation",
+    "security_issue",
+    "contract_violation",
 }
 
 CATEGORY_TO_CONTRACT_IDS = {
     "architecture_boundary_violation": ["C-01", "ARCH-001"],
-    "coderabbit_contract_violation": ["C-01", "C-04", "C-05", "C-06", "C-08", "C-12", "C-17", "C-20"],
-    "coderabbit_security_issue": ["C-06", "C-07", "C-08", "C-10"],
+    "contract_violation": ["C-01", "C-04", "C-05", "C-06", "C-08", "C-12", "C-17", "C-20"],
+    "security_issue": ["C-06", "C-07", "C-08", "C-10"],
     "lint_failure": ["C-04", "C-05", "C-17"],
     "typing_failure": ["C-05", "C-17"],
     "protected_file_violation": ["T4", "T5"],
     "github_required_check_failure": ["C-15"],
-    "codecov_missing_tests_for_changed_code": ["C-15"],
+    "missing_tests_for_changed_code": ["C-15"],
     "docs_consistency_failure": ["C-20"],
 }

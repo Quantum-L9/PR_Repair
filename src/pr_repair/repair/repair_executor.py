@@ -14,10 +14,11 @@ import uuid
 from pathlib import Path
 
 from pr_repair.config import AppConfig
+from pr_repair.logging import log_event
 from pr_repair.planning.approval_gate import requires_human_approval
 from pr_repair.repair.patch_applier import apply_patch_instructions
 from pr_repair.repair.patch_generator import generate_patch_instructions
-from pr_repair.types import ExecutionMode, RepairExecution, RepairPlan
+from pr_repair.types import ExecutionMode, RepairExecution, RepairPlan, ReviewDisposition
 from pr_repair.verification.native_runner import run_verification
 from pr_repair.workspace.git_ops import (
     checkout_pr_branch,
@@ -63,6 +64,17 @@ def execute_repair_plan(
         verification_result = run_verification(plan.verification_command, root)
         if not verification_result.success:
             rollback_to_backup(backup_ref, root)
+            # Deterministic autofixes must never break verification. If they do,
+            # the Semgrep rule is a false-positive candidate: flag it for the CI
+            # platform and fail immediately -- no LLM, no retry.
+            false_positive_rules = _autofix_rule_ids(plan)
+            if false_positive_rules:
+                log_event(
+                    "autofix_false_positive_detected",
+                    pr_number=plan.pr_ref.pr_number,
+                    rules=false_positive_rules,
+                    exit_code=verification_result.exit_code,
+                )
             return RepairExecution(
                 execution_id=str(uuid.uuid4()),
                 pr_ref=plan.pr_ref,
@@ -71,6 +83,7 @@ def execute_repair_plan(
                 modified_files=[],
                 verification_result=verification_result,
                 status="rolled_back_verification_failed",
+                false_positive_rules=false_positive_rules,
             )
 
         push_result = None
@@ -95,3 +108,12 @@ def execute_repair_plan(
     except Exception:
         rollback_to_backup(backup_ref, root)
         raise
+
+
+def _autofix_rule_ids(plan: RepairPlan) -> list[str]:
+    """Collect the Semgrep rule ids of deterministic autofix findings in a plan."""
+    return [
+        finding.rule_id
+        for finding in plan.targeted_findings
+        if finding.review_disposition is ReviewDisposition.autofix and finding.rule_id
+    ]

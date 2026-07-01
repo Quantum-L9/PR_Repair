@@ -47,7 +47,7 @@ def test_execute_repair_plan_applies_and_verifies_without_push(tmp_path: Path) -
             Finding(
                 finding_id="f-77",
                 pr_number=77,
-                source_name=SourceName.coderabbit,
+                source_name=SourceName.agent_review,
                 source_priority=100,
                 severity=Severity.medium,
                 category="lint_failure",

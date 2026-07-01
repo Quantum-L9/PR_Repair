@@ -12,10 +12,10 @@ def test_classifier_marks_protected_path_and_contracts() -> None:
     finding = Finding(
         finding_id="f-1",
         pr_number=22,
-        source_name=SourceName.coderabbit,
+        source_name=SourceName.agent_review,
         source_priority=100,
         severity=Severity.medium,
-        category="coderabbit_style_violation",
+        category="style_violation",
         message="Model field uses camelCase naming.",
         file_path="app/models/entity.py",
         line_start=9,

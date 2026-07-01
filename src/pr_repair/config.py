@@ -23,10 +23,11 @@ from pr_repair.types import ExecutionMode, TierLevel
 class AppConfig(BaseModel):
     github_token: str
     github_repository: str
-    coderabbit_api_key: str | None = None
-    codecov_api_key: str | None = None
-    coderabbit_api_base_url: str | None = None
-    codecov_api_base_url: str = "https://api.codecov.io"
+    payload_path: Path = Path("artifacts/agent_review_payload.json")
+    llm_enabled: bool = False
+    llm_client_id: str = "implementer-bot"
+    llm_shim_path: Path = Path("router-shim/shim.mjs")
+    llm_node_bin: str = "node"
     max_prs: int = 5
     verify_command: list[str] = Field(default_factory=lambda: ["make", "agent-check"])
     mode: ExecutionMode = ExecutionMode.dry_run
@@ -87,10 +88,13 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
     return AppConfig(
         github_token=github_token,
         github_repository=github_repository,
-        coderabbit_api_key=os.getenv("CODERABBIT_API_KEY"),
-        codecov_api_key=os.getenv("CODECOV_API_KEY"),
-        coderabbit_api_base_url=os.getenv("CODERABBIT_API_BASE_URL"),
-        codecov_api_base_url=os.getenv("CODECOV_API_BASE_URL", "https://api.codecov.io"),
+        payload_path=Path(
+            os.getenv("PR_FIX_PAYLOAD_PATH", "artifacts/agent_review_payload.json")
+        ),
+        llm_enabled=os.getenv("PR_FIX_LLM_ENABLED", "0") == "1",
+        llm_client_id=os.getenv("PR_FIX_LLM_CLIENT_ID", "implementer-bot"),
+        llm_shim_path=Path(os.getenv("PR_FIX_LLM_SHIM_PATH", "router-shim/shim.mjs")),
+        llm_node_bin=os.getenv("PR_FIX_LLM_NODE_BIN", "node"),
         max_prs=int(os.getenv("PR_FIX_MAX_PRS", "5")),
         verify_command=verify_command,
         mode=mode,

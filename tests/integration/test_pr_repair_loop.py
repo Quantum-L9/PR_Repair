@@ -36,7 +36,7 @@ def _finding(fp: str = "fp-1") -> Finding:
     return Finding(
         finding_id="f-1",
         pr_number=12,
-        source_name=SourceName.coderabbit,
+        source_name=SourceName.agent_review,
         source_priority=100,
         severity=Severity.medium,
         category="lint_failure",
