@@ -15,6 +15,7 @@ from pathlib import Path
 
 from pr_repair.config import load_config, resolve_verify_command
 from pr_repair.pipeline.run_pipeline import run_pipeline
+from pr_repair.reporting import run_report
 from pr_repair.state_store import StateStore
 from pr_repair.types import ExecutionMode
 from pr_repair.verification.native_runner import run_verification
@@ -32,6 +33,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
     run_parser.add_argument(
+        "--payload-path",
+        default=None,
+        help="Path to agent_review_payload.json (default: artifacts/agent_review_payload.json).",
+    )
+
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Proposal-only run: route findings, write telemetry/trace, post the "
+        "governance comment. Never applies patches.",
+    )
+    report_parser.add_argument(
         "--payload-path",
         default=None,
         help="Path to agent_review_payload.json (default: artifacts/agent_review_payload.json).",
@@ -55,7 +67,18 @@ def main() -> int:
             updates["payload_path"] = Path(args.payload_path)
         if updates:
             config = config.model_copy(update=updates)
+        # propose_only is a read-only mode; route it to the reporter even when
+        # requested via `run --mode propose_only` or PR_FIX_MODE=propose_only.
+        if config.mode is ExecutionMode.propose_only:
+            return run_report(config)
         return run_pipeline(config)
+
+    if args.command == "report":
+        updates = {"mode": ExecutionMode.propose_only}
+        if args.payload_path is not None:
+            updates["payload_path"] = Path(args.payload_path)
+        config = config.model_copy(update=updates)
+        return run_report(config)
 
     if args.command == "verify":
         report = run_verification(resolve_verify_command(config))
