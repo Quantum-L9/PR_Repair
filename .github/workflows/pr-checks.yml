@@ -84,8 +84,10 @@ jobs:
       - name: ggshield secret scan (blocking gate)
         uses: GitGuardian/ggshield-action@v1
         env:
+          # Commit-range env per GitGuardian/ggshield-action's documented contract:
+          # push uses BEFORE_SHA/BASE_SHA (github.event.base), PR uses PULL_BASE_SHA.
           GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
-          GITHUB_PUSH_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
           GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
@@ -104,6 +106,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage
+          # Extract into the repo root so sonar.python.coverage.reportPaths=coverage.xml
+          # resolves. A single named artifact download does not create a name-based
+          # subdirectory, but pin path explicitly to remove all ambiguity.
+          path: .
         continue-on-error: true
       - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v4
