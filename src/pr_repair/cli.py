@@ -11,8 +11,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
+from pr_repair import review_ingest
 from pr_repair.config import load_config, resolve_verify_command
 from pr_repair.pipeline.run_pipeline import run_pipeline
 from pr_repair.state_store import StateStore
@@ -39,12 +41,36 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("verify")
     subparsers.add_parser("learn")
+
+    ingest_parser = subparsers.add_parser(
+        "ingest-review",
+        help="Normalize a live PR review into agent_review_payload.json.",
+    )
+    ingest_parser.add_argument("--output", required=True)
+    ingest_parser.add_argument("--context", default=None)
+    ingest_parser.add_argument("--event-path", default=None)
+    ingest_parser.add_argument(
+        "--event-name",
+        default=os.getenv("GITHUB_EVENT_NAME", "pull_request_review"),
+    )
     return parser
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    # Review ingestion is a standalone entrypoint: it produces the payload the
+    # rest of the pipeline consumes, so it must not require the bot's full runtime
+    # config (GITHUB_REPOSITORY etc.). Handle it before load_config().
+    if args.command == "ingest-review":
+        return review_ingest.run(
+            output=args.output,
+            context=args.context,
+            event_path=args.event_path,
+            event_name=args.event_name,
+        )
+
     config = load_config()
 
     if args.command == "run":
