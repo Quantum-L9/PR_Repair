@@ -16,7 +16,7 @@ from pr_repair.normalization.fingerprint import build_finding_fingerprint
 from pr_repair.types import Finding, FindingBundle
 
 
-def normalize_finding(raw: dict, source_name: str, source_priority: int) -> Finding:
+def normalize_finding(raw: dict[str, object], source_name: str, source_priority: int) -> Finding:
     """
     Canonical normalization entrypoint for future raw-payload extensions.
     """

@@ -15,13 +15,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from pr_repair.config import AppConfig
 from pr_repair.planning.approval_gate import requires_human_approval
 from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.repair.repair_executor import execute_repair_plan
-from pr_repair.runtime.pr_state_store import PRRepairState, PRStateStore
+from pr_repair.runtime.pr_state_store import CIStatus, PRRepairState, PRStateStore, ReviewStatus
 from pr_repair.types import Finding, PRRef, RepairExecution, RepairPlan
 
 
@@ -118,7 +118,9 @@ class PRLoopOrchestrator:
             return self._block(state, TerminalBlocker.fork_pr_detected)
         if self._is_protected_branch_direct_mutation(pr_ref):
             return self._block(state, TerminalBlocker.protected_branch_direct_mutation)
-        state.ci_status, state.review_status = self.signal_provider(pr_ref)
+        ci_raw, review_raw = self.signal_provider(pr_ref)
+        state.ci_status = cast(CIStatus, ci_raw)
+        state.review_status = cast(ReviewStatus, review_raw)
         if state.ci_status == "success" and state.review_status in {"approved", "unknown"}:
             state.mark_terminal("clean")
             self.state_store.save(state)

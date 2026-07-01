@@ -68,7 +68,7 @@ def _load_changed_files_if_supported(
     if not hasattr(github_connector, "get_pr_changed_files"):
         return []
 
-    raw_files = github_connector.get_pr_changed_files(  # type: ignore[attr-defined]
+    raw_files = github_connector.get_pr_changed_files(
         pr.repo_owner,
         pr.repo_name,
         pr.pr_number,

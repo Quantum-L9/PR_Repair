@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 def apply_patch_instructions(
-    instructions: list[dict],
+    instructions: list[dict[str, object]],
     repo_root: Path | None = None,
 ) -> list[str]:
     """

@@ -13,7 +13,7 @@ from __future__ import annotations
 from pr_repair.types import LearningPacket
 
 
-def build_validator_recommendations(packets: list[LearningPacket]) -> dict:
+def build_validator_recommendations(packets: list[LearningPacket]) -> dict[str, object]:
     """
     Build a reviewable validator recommendation packet.
 

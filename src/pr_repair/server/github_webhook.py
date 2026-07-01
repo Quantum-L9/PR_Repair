@@ -14,7 +14,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 
 SUPPORTED_ACTIONS: dict[str, set[str]] = {
@@ -139,7 +139,7 @@ def _header(headers: dict[str, str], name: str) -> str | None:
 def _repo_full_name(payload: dict[str, Any]) -> str | None:
     repo = payload.get("repository")
     if isinstance(repo, dict) and isinstance(repo.get("full_name"), str):
-        return repo["full_name"]
+        return cast(str, repo["full_name"])
     return None
 
 
@@ -148,14 +148,16 @@ def _pr_ref(event_name: str, payload: dict[str, Any]) -> tuple[int | None, str |
         pr = payload.get("pull_request")
         if not isinstance(pr, dict):
             return None, None
-        head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+        head_raw = pr.get("head")
+        head: dict[str, Any] = head_raw if isinstance(head_raw, dict) else {}
         number = pr.get("number")
         return int(number) if isinstance(number, int) else None, str(head.get("sha")) if head.get("sha") else None
     prs = payload.get("pull_requests")
     if isinstance(prs, list) and prs and isinstance(prs[0], dict):
         pr = prs[0]
         number = pr.get("number")
-        head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+        head_raw = pr.get("head")
+        head = head_raw if isinstance(head_raw, dict) else {}
         return int(number) if isinstance(number, int) else None, str(head.get("sha")) if head.get("sha") else None
     workflow = payload.get("workflow_run")
     if isinstance(workflow, dict):

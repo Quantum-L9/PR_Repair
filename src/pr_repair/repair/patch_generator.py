@@ -18,7 +18,7 @@ from pr_repair.types import Finding, RepairPlan
 def generate_patch_instructions(
     plan: RepairPlan,
     repo_root: Path | None = None,
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """Translate targeted findings into exact, guarded patch instructions.
 
     Two lanes feed one applier:
@@ -28,7 +28,7 @@ def generate_patch_instructions(
     - legacy/LLM findings carry a ``suggested_fix`` -> single-line ``replace_line``.
     """
     root = repo_root or Path.cwd()
-    instructions: list[dict] = []
+    instructions: list[dict[str, object]] = []
     for finding in plan.targeted_findings:
         if not finding.file_path or finding.line_start is None:
             continue

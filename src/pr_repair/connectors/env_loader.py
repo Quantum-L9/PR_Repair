@@ -21,6 +21,6 @@ def load_dotenv_local(path: str = ".env.local") -> dict[str, str]:
     raw_values = dotenv_values(dotenv_path)
     loaded: dict[str, str] = {}
     for key, value in raw_values.items():
-        if key and value not in (None, ""):
+        if key and value is not None and value != "":
             loaded[key] = value
     return loaded

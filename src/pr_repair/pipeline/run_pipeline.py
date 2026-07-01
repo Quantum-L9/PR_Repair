@@ -43,6 +43,7 @@ from pr_repair.types import (
     Finding,
     PRRef,
     RepairExecution,
+    RepairPlan,
     RepoContext,
     RuntimeState,
 )
@@ -277,7 +278,7 @@ def _post_implementer_comment(config: AppConfig, pr: PRRef, body: str) -> None:
         log_event("implementer_comment_failed", pr_number=pr.pr_number, error=str(exc))
 
 
-def _planned_execution_stub(plan) -> RepairExecution:
+def _planned_execution_stub(plan: RepairPlan) -> RepairExecution:
     return RepairExecution(
         execution_id=f"plan-{plan.pr_ref.pr_number}",
         pr_ref=plan.pr_ref,
