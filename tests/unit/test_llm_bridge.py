@@ -157,6 +157,17 @@ def test_propose_repairs_rejects_malformed_patch(tmp_path: Path) -> None:
     assert proposals[0].instruction is None
 
 
+def test_propose_repairs_rejects_repo_wide_finding_without_file_path(tmp_path: Path) -> None:
+    # A repo-wide manual finding carries no file_path; an LLM patch instruction
+    # cannot target a file, so it must never become an applicable instruction.
+    finding = _manual_finding().model_copy(update={"file_path": None})
+    content = json.dumps(
+        {"op": "replace_range", "line_start": 3, "line_end": 3, "replacement": "x = 1", "rationale": "fix"}
+    )
+    proposals = propose_repairs([finding], _FakeClient(content=content), tmp_path, "c")
+    assert proposals[0].instruction is None
+
+
 def test_propose_repairs_router_unavailable_degrades_gracefully(tmp_path: Path) -> None:
     class _Down:
         def generate(self, requests):

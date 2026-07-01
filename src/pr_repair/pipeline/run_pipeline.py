@@ -75,10 +75,12 @@ def run_pipeline(config: AppConfig) -> int:
         return _run_pipeline_traced(config, repo_root, repo_context, store, runtime_manager, run_state)
     finally:
         recorder.stop()
+        # Trace emission is best-effort and must never mask the run's real exit code.
+        # StateStore.write_json wraps OSError as StateStoreError, so catch broadly.
         try:
             store.write_json("run_trace.json", recorder.to_list())
-        except OSError:
-            log_event("run_trace_write_failed")
+        except Exception as exc:  # noqa: BLE001 - best-effort trace write
+            log_event("run_trace_write_failed", error=str(exc))
 
 
 def _run_pipeline_traced(
@@ -140,11 +142,14 @@ def _run_pipeline_traced(
             [proposal.model_dump(mode="json") for proposal in proposals],
         )
 
-    # The execution plan covers ONLY the deterministic autofix lane. Manual-review
-    # findings are handled by the proposal lane (above) and must not raise the
-    # plan's risk/approval gate -- a high-severity architectural finding in the PR
-    # cannot block an unrelated, deterministic Semgrep autofix.
-    plan = build_repair_plan(pr, route.autofix, config)
+    # The execution plan targets the deterministic autofix lane, so a high-severity
+    # *manual* finding cannot gate an unrelated Semgrep autofix. BUT protected-path
+    # gating is a PR-level governance invariant: if ANY finding (autofix OR manual)
+    # touches a protected path, the plan must require approval. We therefore include
+    # protected-path manual findings when building the plan -- they are never
+    # repairable, so they only raise the gate, never get auto-applied.
+    protected_manual = [finding for finding in route.manual if finding.protected_path]
+    plan = build_repair_plan(pr, route.autofix + protected_manual, config)
 
     execution: RepairExecution | None = None
     needs_approval = requires_human_approval(plan, config)
