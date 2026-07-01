@@ -38,6 +38,25 @@ class AppConfig(BaseModel):
     include_drafts: bool = False
     write_ceiling: TierLevel = TierLevel.t1
     fix_matrix_path: Path = Path("contracts/fix_matrix.yaml")
+    # Per-tool actuation toggles. Copilot is the proven default lane; the others
+    # are opt-in until validated in the target repo.
+    tool_copilot: bool = True
+    tool_coderabbit: bool = False
+    tool_sonarcloud: bool = False
+    tool_gitguardian: bool = False
+
+    @property
+    def enabled_tools(self) -> set[str]:
+        return {
+            name
+            for name, on in (
+                ("copilot", self.tool_copilot),
+                ("coderabbit", self.tool_coderabbit),
+                ("sonarcloud", self.tool_sonarcloud),
+                ("gitguardian", self.tool_gitguardian),
+            )
+            if on
+        }
 
     @field_validator("github_repository")
     @classmethod
@@ -108,6 +127,10 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
         include_drafts=os.getenv("PR_FIX_INCLUDE_DRAFTS", "0") == "1",
         write_ceiling=write_ceiling,
         fix_matrix_path=Path(os.getenv("PR_FIX_MATRIX_PATH", "contracts/fix_matrix.yaml")),
+        tool_copilot=os.getenv("PR_FIX_TOOL_COPILOT", "1") == "1",
+        tool_coderabbit=os.getenv("PR_FIX_TOOL_CODERABBIT", "0") == "1",
+        tool_sonarcloud=os.getenv("PR_FIX_TOOL_SONARCLOUD", "0") == "1",
+        tool_gitguardian=os.getenv("PR_FIX_TOOL_GITGUARDIAN", "0") == "1",
     )
 
 
