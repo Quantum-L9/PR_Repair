@@ -134,7 +134,14 @@ def _run_pipeline_traced(
             [proposal.model_dump(mode="json") for proposal in proposals],
         )
 
-    plan = build_repair_plan(pr, classified_findings, config)
+    # The execution plan targets the deterministic autofix lane, so a high-severity
+    # *manual* finding cannot gate an unrelated Semgrep autofix. BUT protected-path
+    # gating is a PR-level governance invariant: if ANY finding (autofix OR manual)
+    # touches a protected path, the plan must require approval. We therefore include
+    # protected-path manual findings when building the plan -- they are never
+    # repairable, so they only raise the gate, never get auto-applied.
+    protected_manual = [finding for finding in route.manual if finding.protected_path]
+    plan = build_repair_plan(pr, route.autofix + protected_manual, config)
 
     execution: RepairExecution | None = None
     needs_approval = requires_human_approval(plan, config)
