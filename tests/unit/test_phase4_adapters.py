@@ -18,7 +18,7 @@ def _thread(login: str, body: str, *, path="svc/x.py", line=10, resolved=False) 
     return {
         "id": "PRRT_1", "isResolved": resolved, "path": path, "line": line,
         "comments": {"nodes": [
-            {"id": "PRRC", "databaseId": 42, "body": body, "author": {"login": login}, "url": "http://x"}
+            {"id": "PRRC", "databaseId": 42, "body": body, "author": {"login": login}, "url": "https://x"}
         ]},
     }
 

@@ -9,7 +9,7 @@
     "setup": "bash ./setup.sh"
   },
   "dependencies": {
-    "@quantum-l9/llm-router": "github:Quantum-L9/LLM-Router#main"
+    "@quantum-l9/llm-router": "github:Quantum-L9/LLM-Router#87075d8228f2ac0e16056894cc4f5c8335498f17"
   },
   "engines": { "node": ">=20" }
 }

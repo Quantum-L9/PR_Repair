@@ -21,7 +21,7 @@ def _thread(body: str, thread_id: str, comment_id: int) -> dict:
         "id": thread_id, "isResolved": False, "path": "engine.py", "line": 2,
         "comments": {"nodes": [
             {"id": "PRRC", "databaseId": comment_id, "body": body,
-             "author": {"login": "copilot-pull-request-reviewer[bot]"}, "url": "http://x"}
+             "author": {"login": "copilot-pull-request-reviewer[bot]"}, "url": "https://x"}
         ]},
     }
 

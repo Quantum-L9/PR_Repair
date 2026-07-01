@@ -35,7 +35,7 @@ def _thread(body, *, resolved=False, login="copilot-pull-request-reviewer[bot]",
         "line": 2,
         "comments": {
             "nodes": [
-                {"id": "PRRC_1", "databaseId": cid, "body": body, "author": {"login": login}, "url": "http://x"}
+                {"id": "PRRC_1", "databaseId": cid, "body": body, "author": {"login": login}, "url": "https://x"}
             ]
         },
     }
