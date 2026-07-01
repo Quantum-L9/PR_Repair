@@ -356,6 +356,11 @@ def run(
         generated_at = datetime.now(UTC).isoformat()
 
     try:
+        # Fail-fast + fail-closed: validate the untrusted --output path inside the
+        # guarded block so an out-of-root path returns EXIT_FAILED instead of
+        # raising uncaught (honors this function's no-raise contract). _write_payload
+        # re-checks at the sink, so the write remains self-guarding either way.
+        _safe_path(output)
         if context is not None:
             payload = payload_from_context(_load_json_dict(context), generated_at=generated_at)
         elif event_path is not None:

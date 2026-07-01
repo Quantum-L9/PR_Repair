@@ -84,3 +84,28 @@ def test_run_still_reads_and_writes_valid_temp_paths(tmp_path: Path) -> None:
     rc = review_ingest.run(output=str(out), context=str(ctx))
     # Path was accepted (no ReviewIngestError for path); failure is the JSON parse.
     assert rc == review_ingest.EXIT_FAILED
+
+
+def test_out_of_root_output_returns_exit_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (M1): a valid input with an out-of-root --output must return
+    EXIT_FAILED, not raise ReviewIngestError. Guards run()'s no-raise contract.
+    """
+    # Confine allowed roots to tmp_path so /etc is provably outside.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PR_REPAIR_IO_ROOT", str(tmp_path))
+    ctx = tmp_path / "ctx.json"
+    ctx.write_text("{}", encoding="utf-8")  # readable, in-root -> input path passes
+
+    # Make the payload build + validation succeed so execution would otherwise
+    # reach the write sink; the out-of-root output must be rejected as EXIT_FAILED.
+    monkeypatch.setattr(
+        review_ingest,
+        "payload_from_context",
+        lambda *a, **k: {"autofix_candidates": [], "manual_review_required": []},
+    )
+    monkeypatch.setattr(review_ingest, "_validate_payload", lambda payload: None)
+
+    rc = review_ingest.run(output="/etc/pwned.json", context=str(ctx))
+    assert rc == review_ingest.EXIT_FAILED
