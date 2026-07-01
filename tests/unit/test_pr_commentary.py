@@ -143,6 +143,27 @@ def test_upsert_updates_existing_marked_comment() -> None:
     assert connector.posted == []
 
 
+def test_upsert_requires_marker_at_start() -> None:
+    connector = _FakeConnector(existing=[])
+    try:
+        upsert_implementer_comment(connector, _pr(), f"prefix text\n{MARKER}\nbody")
+    except ValueError as exc:
+        assert "start with" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for non-leading marker")
+
+
+def test_upsert_ignores_comment_that_merely_quotes_marker() -> None:
+    # A human comment that quotes the marker mid-body must not be mistaken for the
+    # bot's comment; a fresh comment is created instead of overwriting it.
+    connector = _FakeConnector(existing=[{"id": 7, "body": f"quoting the bot: `{MARKER}`"}])
+    body = f"{MARKER}\ntable"
+    upsert_implementer_comment(connector, _pr(), body)
+
+    assert connector.posted == [body]
+    assert connector.updated == []
+
+
 def test_upsert_rejects_body_without_marker() -> None:
     connector = _FakeConnector(existing=[])
     try:

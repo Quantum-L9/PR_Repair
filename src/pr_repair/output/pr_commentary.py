@@ -83,14 +83,16 @@ def upsert_implementer_comment(
     connector: _CommentConnector, pr: PRRef, body: str
 ) -> dict[str, object]:
     """Maintain exactly one marker-keyed comment per PR: update if present, else create."""
-    if MARKER not in body:
-        msg = "implementer comment body is missing the L9 marker"
+    # The marker must LEAD the body (Trio Governance protocol). Requiring it at the
+    # start prevents collisions with comments that merely quote the marker.
+    if not body.startswith(MARKER):
+        msg = "implementer comment body must start with the L9 marker"
         raise ValueError(msg)
 
     existing = connector.get_issue_comments(pr.repo_owner, pr.repo_name, pr.pr_number)
     for comment in existing:
         comment_body = comment.get("body")
-        if isinstance(comment_body, str) and MARKER in comment_body:
+        if isinstance(comment_body, str) and comment_body.startswith(MARKER):
             comment_id = comment.get("id")
             if isinstance(comment_id, int):
                 return connector.update_issue_comment(
@@ -129,11 +131,9 @@ def _patch_status(
             return "⏳ planned"
         return "—"
     if finding.review_disposition is ReviewDisposition.manual_review:
-        if proposal is None:
-            return "👤 manual review"
-        if proposal.abstained:
-            return "👤 manual review (no proposal)"
-        return "📝 proposed"
+        if proposal is not None and not proposal.abstained:
+            return "📝 proposed"
+        return "👤 manual"
     return "—"
 
 
