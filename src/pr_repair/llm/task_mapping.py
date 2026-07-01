@@ -22,6 +22,7 @@ import json
 from pathlib import Path
 
 from pr_repair.llm.contract import LLMRequest
+from pr_repair.redaction import redact_secrets
 from pr_repair.types import Finding, Severity
 
 _SEVERITY_TO_COMPLEXITY = {
@@ -52,20 +53,29 @@ def finding_complexity(finding: Finding) -> str:
     return _SEVERITY_TO_COMPLEXITY.get(finding.severity, "medium")
 
 
-def build_request(finding: Finding, repo_root: Path, client_id: str) -> LLMRequest:
-    """Build a bounded code-repair request for a single manual-review finding."""
+def build_request(
+    finding: Finding,
+    repo_root: Path,
+    client_id: str,
+    feedback: str | None = None,
+) -> LLMRequest:
+    """Build a bounded code-repair request for a single manual-review finding.
+
+    ``feedback`` carries the verification stderr from a failed prior attempt so the
+    model can correct itself on the single allowed retry.
+    """
     return LLMRequest(
         finding_id=finding.finding_id,
         task_type="code_generation",
         complexity=finding_complexity(finding),
         system_prompt=SYSTEM_PROMPT,
-        user_prompt=_build_user_prompt(finding, repo_root),
+        user_prompt=_build_user_prompt(finding, repo_root, feedback),
         client_id=client_id,
         expected_output_tokens=512,
     )
 
 
-def _build_user_prompt(finding: Finding, repo_root: Path) -> str:
+def _build_user_prompt(finding: Finding, repo_root: Path, feedback: str | None = None) -> str:
     payload: dict[str, object] = {
         "finding_id": finding.finding_id,
         "category": finding.category,
@@ -79,6 +89,10 @@ def _build_user_prompt(finding: Finding, repo_root: Path) -> str:
     context = _file_context(finding, repo_root)
     if context is not None:
         payload["file_context"] = context
+    if feedback:
+        # Verification stderr can contain secrets (tokens in URLs, env dumps, auth
+        # headers). Redact before forwarding to the external model.
+        payload["prior_attempt_verification_failure"] = redact_secrets(feedback)[-4000:]
     return json.dumps(payload, indent=2, sort_keys=True)
 
 

@@ -34,8 +34,13 @@ def propose_repairs(
     llm_client: LLMClient,
     repo_root: Path,
     client_id: str,
+    feedback: str | None = None,
 ) -> list[ProposedPatch]:
-    """Generate bounded patch proposals for manual-review findings."""
+    """Generate bounded patch proposals for manual-review findings.
+
+    ``feedback`` (verification stderr from a failed attempt) is threaded into every
+    request so the model can correct itself on the single allowed retry.
+    """
     eligible = [f for f in manual_findings if not f.protected_path]
     skipped = len(manual_findings) - len(eligible)
     if not eligible:
@@ -43,7 +48,7 @@ def propose_repairs(
             log_event("llm_proposals_skipped_protected", count=skipped)
         return []
 
-    requests = [build_request(f, repo_root, client_id) for f in eligible]
+    requests = [build_request(f, repo_root, client_id, feedback) for f in eligible]
     try:
         results = llm_client.generate(requests)
     except LLMUnavailableError as exc:

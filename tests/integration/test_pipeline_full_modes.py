@@ -244,3 +244,65 @@ def test_run_pipeline_fails_closed_when_payload_missing(tmp_path: Path, monkeypa
     assert trace_path.exists()
     trace = json.loads(trace_path.read_text(encoding="utf-8"))
     assert "payload_ingestion_failed" in [entry["event"] for entry in trace]
+
+
+def _manual_only_payload(path: Path) -> None:
+    payload = {
+        "schema_version": "1.0.0",
+        "pr": {
+            "repo_owner": "owner", "repo_name": "repo", "pr_number": 77, "title": "t",
+            "head_branch": "fix-77", "base_branch": "main", "head_sha": "s",
+            "is_draft": False, "author": "bot", "labels": [], "changed_files": ["svc/x.py"],
+        },
+        "autofix_candidates": [],
+        "manual_review_required": [
+            {"finding_id": "mr-77", "category": "compliance_failure", "severity": "medium",
+             "message": "complex compliance issue", "file_path": "svc/x.py",
+             "line_start": 1, "line_end": 1},
+        ],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_pipeline_invokes_llm_apply_only_when_enabled(monkeypatch, tmp_path: Path) -> None:
+    from pr_repair.llm.contract import ProposedPatch
+    from pr_repair.types import RepairExecution as RE
+
+    (tmp_path / "AGENT.md").write_text("# AGENT\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    payload_path = tmp_path / "agent_review_payload.json"
+    _manual_only_payload(payload_path)
+
+    # Force an actionable proposal regardless of the (Null) client.
+    def fake_propose(manual, client, root, client_id, feedback=None):
+        return [ProposedPatch(
+            finding_id="mr-77", file_path="svc/x.py", abstained=False,
+            instruction={"op": "replace_range", "file_path": "svc/x.py", "line_start": 1,
+                         "line_end": 1, "replacement": "fixed", "finding_id": "mr-77"},
+        )]
+
+    calls = {"apply": 0}
+
+    def fake_apply(pr, applicable, config, repo_root, regenerate=None):
+        calls["apply"] += 1
+        return RE(execution_id="llm", pr_ref=pr, plan_id="llm-77", mode=config.mode,
+                  modified_files=["svc/x.py"], status="completed")
+
+    monkeypatch.setattr("pr_repair.pipeline.run_pipeline.propose_repairs", fake_propose)
+    monkeypatch.setattr("pr_repair.pipeline.run_pipeline.apply_llm_proposals", fake_apply)
+
+    def make_config(llm_apply: bool, out: str) -> AppConfig:
+        return AppConfig(
+            github_token="t", github_repository="owner/repo", payload_path=payload_path,
+            verify_command=["python", "-c", "print('ok')"], mode=ExecutionMode.repair_and_verify,
+            output_dir=tmp_path / out, write_ceiling=TierLevel.t1, llm_apply=llm_apply,
+        )
+
+    # Disabled: apply is never called.
+    assert run_pipeline(make_config(False, "off")) == 0
+    assert calls["apply"] == 0
+
+    # Enabled: apply is invoked and its execution artifact is written.
+    assert run_pipeline(make_config(True, "on")) == 0
+    assert calls["apply"] == 1
+    assert (tmp_path / "on" / "prs" / "pr_77" / "llm_repair_execution.json").exists()
