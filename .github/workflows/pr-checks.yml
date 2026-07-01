@@ -1,0 +1,136 @@
+# --- L9_META ---
+# origin: l9-ci-enablement-pack
+# layer: [ci, quality, security]
+# tags: [pr-gate, ruff, mypy, pytest, gitguardian, sonar]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# PR quality + security gate for PR_Repair.
+#
+# Blocking gates:   pytest (unit/integration), GitGuardian secret scan.
+# Advisory (non-blocking until the repo is clean): ruff, mypy --strict, Sonar.
+#   The repo currently has pre-existing ruff (16) and mypy --strict findings; these
+#   run with continue-on-error so they report without blocking every PR. Flip
+#   `continue-on-error: false` once those are driven to zero (see RUNBOOK.md).
+#
+# Secrets are NOT available to pull_request runs from forks (GitHub security). The
+# secret-dependent jobs are therefore guarded to same-repo PRs; the quality job
+# (no secrets) always runs.
+
+name: PR Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint / Types / Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project + dev tooling
+        # setup-uv@v5 with python-version already provisions and activates a
+        # project .venv (see $VIRTUAL_ENV), so no explicit `uv venv` here — that
+        # would fail with "a virtual environment already exists". uv pip install
+        # targets the active venv; tools run via `uv run`.
+        run: |
+          uv pip install -e .
+          uv pip install ruff mypy pytest pytest-cov types-requests types-PyYAML
+
+      - name: Ruff (advisory)
+        continue-on-error: true
+        run: uv run ruff check .
+
+      - name: Mypy --strict (advisory)
+        continue-on-error: true
+        run: uv run mypy src/ --strict
+
+      - name: Pytest (blocking gate) with coverage
+        run: uv run pytest -q --cov=src/pr_repair --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage.xml
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+
+  gitguardian:
+    name: GitGuardian secret scan
+    runs-on: ubuntu-latest
+    # Secrets are unavailable to fork PRs; skip there rather than fail spuriously.
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: ggshield secret scan (blocking gate)
+        uses: GitGuardian/ggshield-action@v1
+        env:
+          # Commit-range env per GitGuardian/ggshield-action's documented contract:
+          # push uses BEFORE_SHA/BASE_SHA (github.event.base), PR uses PULL_BASE_SHA.
+          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
+          GITHUB_PULL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+
+  sonar:
+    name: SonarQube/SonarCloud analysis (advisory)
+    runs-on: ubuntu-latest
+    needs: quality
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect Sonar configuration
+        id: sonarcfg
+        # The CI scan can only run once sonar-project.properties has a real
+        # projectKey/organization. While they are placeholders (or SonarCloud
+        # Automatic Analysis owns the project) the scan would fail with
+        # "organization does not exist" -- skip cleanly instead of failing.
+        run: |
+          if grep -q 'UNKNOWN_SET_YOUR_SONAR' sonar-project.properties; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::sonar-project.properties still has placeholder projectKey/organization; skipping CI scan. If SonarCloud Automatic Analysis is enabled it provides the Quality Gate; otherwise fill in the real keys (see RUNBOOK.md)."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download coverage.xml
+        if: steps.sonarcfg.outputs.configured == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+          # Extract into the repo root so sonar.python.coverage.reportPaths=coverage.xml
+          # resolves. A single named artifact download does not create a name-based
+          # subdirectory, but pin path explicitly to remove all ambiguity.
+          path: .
+        continue-on-error: true
+      - name: SonarQube scan
+        if: steps.sonarcfg.outputs.configured == 'true'
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          # SONAR_HOST_URL: set as a repo/org variable for self-hosted SonarQube.
+          # For SonarCloud, set sonar.host.url + sonar.organization in
+          # sonar-project.properties (see RUNBOOK.md). projectKey/organization are
+          # Unknown here and MUST be filled in before this job produces results.
