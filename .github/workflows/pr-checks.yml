@@ -102,7 +102,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Detect Sonar configuration
+        id: sonarcfg
+        # The CI scan can only run once sonar-project.properties has a real
+        # projectKey/organization. While they are placeholders (or SonarCloud
+        # Automatic Analysis owns the project) the scan would fail with
+        # "organization does not exist" -- skip cleanly instead of failing.
+        run: |
+          if grep -q 'UNKNOWN_SET_YOUR_SONAR' sonar-project.properties; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::sonar-project.properties still has placeholder projectKey/organization; skipping CI scan. If SonarCloud Automatic Analysis is enabled it provides the Quality Gate; otherwise fill in the real keys (see RUNBOOK.md)."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Download coverage.xml
+        if: steps.sonarcfg.outputs.configured == 'true'
         uses: actions/download-artifact@v4
         with:
           name: coverage
@@ -112,6 +126,7 @@ jobs:
           path: .
         continue-on-error: true
       - name: SonarQube scan
+        if: steps.sonarcfg.outputs.configured == 'true'
         uses: SonarSource/sonarqube-scan-action@v4
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
