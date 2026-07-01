@@ -23,7 +23,9 @@ class GitHubConnector:
 
     Design notes:
     - read operations are safe by default
-    - post_pr_comment is the only write action exposed here
+    - write actions are limited to PR commentary and review-thread lifecycle:
+      post_pr_comment, update_issue_comment, reply_to_review_comment, and
+      resolve/unresolve_review_thread. No merge, no push, no branch mutation.
     - all requests are bounded and fail fast on non-2xx responses
     """
 
@@ -101,6 +103,7 @@ class GitHubConnector:
             pullRequest(number: $pr) {
               reviewThreads(first: 100) {
                 nodes {
+                  id
                   isResolved
                   path
                   line
@@ -162,6 +165,49 @@ class GitHubConnector:
         if not isinstance(payload, dict):
             raise ValueError("unexpected GitHub comment response payload")
         return payload
+
+    def reply_to_review_comment(
+        self, repo_owner: str, repo_name: str, pr_number: int, comment_id: int, body: str
+    ) -> dict[str, Any]:
+        """Post a threaded reply to an existing PR review comment.
+
+        Uses the REST replies endpoint so the reply is nested under the original
+        comment's thread rather than posted as a new top-level comment.
+        """
+        response = self._session.post(
+            f"{self._base_url}/repos/{repo_owner}/{repo_name}/pulls/{pr_number}"
+            f"/comments/{comment_id}/replies",
+            json={"body": body},
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("unexpected GitHub reply response payload")
+        return payload
+
+    def resolve_review_thread(self, thread_id: str) -> dict[str, Any]:
+        """Mark a review thread resolved (GraphQL node id from get_review_threads)."""
+        return self._resolve_review_thread(thread_id, resolve=True)
+
+    def unresolve_review_thread(self, thread_id: str) -> dict[str, Any]:
+        """Re-open a previously resolved review thread."""
+        return self._resolve_review_thread(thread_id, resolve=False)
+
+    def _resolve_review_thread(self, thread_id: str, *, resolve: bool) -> dict[str, Any]:
+        mutation_name = "resolveReviewThread" if resolve else "unresolveReviewThread"
+        query = (
+            "mutation($threadId: ID!) {\n"
+            f"  {mutation_name}(input: {{threadId: $threadId}}) {{\n"
+            "    thread { id isResolved }\n"
+            "  }\n"
+            "}"
+        )
+        payload = self._graphql(query=query, variables={"threadId": thread_id})
+        thread = payload.get("data", {}).get(mutation_name, {}).get("thread", {})
+        if not isinstance(thread, dict):
+            raise ValueError("unexpected GitHub GraphQL thread payload")
+        return thread
 
     def _get(self, path: str, params: dict[str, object] | None = None) -> Any:
         response = self._session.get(f"{self._base_url}{path}", params=params, timeout=30)

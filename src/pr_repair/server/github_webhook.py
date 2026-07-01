@@ -35,10 +35,53 @@ class NormalizedPREvent:
     pr_number: int | None
     head_sha: str | None
     payload: dict[str, Any]
+    # Originating review tool, when the event can be attributed to one (Copilot,
+    # CodeRabbit, SonarCloud, GitGuardian). None for generic/unknown sources.
+    tool: str | None = None
 
     @property
     def supported(self) -> bool:
         return self.trigger != "ignored" and self.repo_full_name is not None and self.pr_number is not None
+
+
+# Substring -> canonical tool name, matched against review author logins and
+# check/app slugs. Ordered longest-first is unnecessary since keys are disjoint.
+_TOOL_SIGNATURES: tuple[tuple[str, str], ...] = (
+    ("copilot", "copilot"),
+    ("coderabbit", "coderabbit"),
+    ("sonar", "sonarcloud"),
+    ("gitguardian", "gitguardian"),
+    ("ggshield", "gitguardian"),
+)
+
+
+def detect_tool(event_name: str, payload: dict[str, Any]) -> str | None:
+    """Attribute an event to its originating review tool, if recognizable.
+
+    Reads review author logins (pull_request_review) and check/workflow names +
+    app slugs (check_run/check_suite/workflow_run). Returns a canonical tool name
+    or None when the source is generic/unknown.
+    """
+    candidates: list[str] = []
+    review = payload.get("review")
+    if isinstance(review, dict):
+        candidates.append(_login(review.get("user")))
+    for key in ("check_run", "check_suite", "workflow_run"):
+        node = payload.get(key)
+        if isinstance(node, dict):
+            candidates.append(str(node.get("name", "")))
+            app = node.get("app")
+            if isinstance(app, dict):
+                candidates.append(str(app.get("slug", "")))
+    haystack = " ".join(c for c in candidates if c).lower()
+    for needle, canonical in _TOOL_SIGNATURES:
+        if needle in haystack:
+            return canonical
+    return None
+
+
+def _login(user: Any) -> str:
+    return str(user.get("login", "")) if isinstance(user, dict) else ""
 
 
 class WebhookSignatureError(ValueError):
@@ -79,7 +122,10 @@ def parse_github_webhook(
         trigger = "review_completed"
     elif event_name in {"check_suite", "check_run", "workflow_run"}:
         trigger = "ci_completed"
-    return NormalizedPREvent(event_name, action, trigger, repo_full_name, pr_number, head_sha, payload)
+    tool = detect_tool(event_name, payload)
+    return NormalizedPREvent(
+        event_name, action, trigger, repo_full_name, pr_number, head_sha, payload, tool
+    )
 
 
 def _header(headers: dict[str, str], name: str) -> str | None:

@@ -94,6 +94,13 @@ class Finding(BaseModel):
     rule_id: str | None = None
     review_disposition: ReviewDisposition | None = None
     evidence_url: str | None = None
+    # Per-tool actuation metadata (optional; populated by tool adapters). ``tags``
+    # carry tool-native labels for strategy routing; ``tool`` is the originating
+    # review tool; ``thread_id``/``comment_id`` anchor the reply+resolve loop.
+    tags: list[str] = Field(default_factory=list)
+    tool: str | None = None
+    thread_id: str | None = None
+    comment_id: int | None = None
     repairable: bool = False
     confidence: float = 0.0
     fingerprint: str
