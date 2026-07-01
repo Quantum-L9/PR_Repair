@@ -1,0 +1,113 @@
+# --- L9_META ---
+# origin: l9-pr-repair-actuation
+# layer: [ci, actuation]
+# tags: [pr-repair, pull-request-review, dry-run-default]
+# owner: platform
+# status: active
+# --- /L9_META ---
+#
+# GitHub-Action-native PR repair actuation (Option A).
+#
+# Trigger: a code-review tool (or human) submits a review on a PR. The bot then
+# runs the deterministic repair pipeline (`pr-repair run`) against the canonical
+# agent_review_payload.json for that PR.
+#
+# SAFETY MODEL — every write gate is OFF by default:
+#   * mode          = dry_run   (no mutation) unless vars.PR_REPAIR_MODE overrides
+#   * post_comment  = 0         (no PR comments) unless vars.PR_REPAIR_POST_COMMENT=1
+#   * allow_push    = 0         (HARDCODED off here — the workflow can never push;
+#                                pushing requires a deliberate workflow edit)
+#   * master switch = the repo variable PR_REPAIR_ENABLED must equal 'true', else
+#                     the job is skipped entirely (opt-in, not opt-out).
+#   * fork guard    = same-repo PRs only. Fork PRs never receive repository
+#                     secrets and must never trigger writes against untrusted code.
+#
+# KNOWN GAP (honest): the per-tool review -> agent_review_payload.json normalizer
+# is not yet wired as a runtime entrypoint (see docs/actuation/validation_report.yaml).
+# Until it is, this workflow only actuates when an upstream step has produced the
+# payload; absent a payload it skips cleanly with a notice rather than failing.
+#
+# REQUIRED / OPTIONAL configuration:
+#   secrets.GITHUB_TOKEN            provided automatically by Actions (no setup).
+#   vars.PR_REPAIR_ENABLED         'true' to arm the job (default: unset -> skip).
+#   vars.PR_REPAIR_MODE            'dry_run' (default) | repair_and_verify | ...
+#   vars.PR_REPAIR_POST_COMMENT    '1' to let the bot reply on threads. NOTE: this
+#                                  also requires bumping `pull-requests: write`
+#                                  below; left at read as the least-privilege default.
+#   vars.PR_REPAIR_WRITE_CEILING   tier ceiling for mutations (default: t1).
+#
+# FAILURE BEHAVIOR: advisory. The pipeline fails closed (non-zero exit) on a
+# missing/invalid payload, which surfaces as a failed check but performs no writes.
+
+name: PR Repair (actuation)
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+# Least-privilege. Read-only is sufficient for dry-run actuation. Enabling
+# vars.PR_REPAIR_POST_COMMENT=1 additionally requires `pull-requests: write`.
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-repair-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  actuate:
+    name: Deterministic PR repair (dry-run by default)
+    runs-on: ubuntu-latest
+    # Guardrails: armed only by explicit repo variable, same-repo PRs only, and
+    # not for bare "commented" reviews (no approve/request-changes signal).
+    if: >-
+      vars.PR_REPAIR_ENABLED == 'true'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.review.state != 'commented'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project
+        run: uv pip install -e .
+
+      - name: Locate review payload
+        id: payload
+        env:
+          PR_FIX_PAYLOAD_PATH: artifacts/agent_review_payload.json
+        run: |
+          if [ -f "$PR_FIX_PAYLOAD_PATH" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No $PR_FIX_PAYLOAD_PATH found; nothing to actuate. The review->payload normalizer entrypoint is a tracked gap."
+          fi
+
+      - name: Run PR repair (dry-run, no writes by default)
+        if: steps.payload.outputs.present == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_FIX_PAYLOAD_PATH: artifacts/agent_review_payload.json
+          PR_FIX_MODE: ${{ vars.PR_REPAIR_MODE || 'dry_run' }}
+          PR_FIX_POST_COMMENT: ${{ vars.PR_REPAIR_POST_COMMENT || '0' }}
+          PR_FIX_WRITE_CEILING: ${{ vars.PR_REPAIR_WRITE_CEILING || 't1' }}
+          # Hardcoded off: this workflow never pushes. Pushing is a deliberate,
+          # reviewed workflow change, not a toggle.
+          PR_FIX_ALLOW_PUSH: '0'
+        run: uv run pr-repair run
+
+      - name: Upload run artifacts
+        if: always() && steps.payload.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-repair-runtime
+          path: runtime/pr_repair/
+          if-no-files-found: ignore
