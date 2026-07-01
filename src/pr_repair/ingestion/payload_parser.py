@@ -140,6 +140,11 @@ class PayloadParser:
 
     def _validate(self, raw: dict[str, Any]) -> None:
         schema = self._load_schema()
+        try:
+            jsonschema.Draft202012Validator.check_schema(schema)
+        except jsonschema.exceptions.SchemaError as exc:
+            msg = f"payload schema at {self.schema_path} is not a valid JSON Schema: {exc}"
+            raise PayloadIngestionError(msg) from exc
         validator = jsonschema.Draft202012Validator(schema)
         errors = sorted(validator.iter_errors(raw), key=lambda err: list(err.absolute_path))
         if errors:

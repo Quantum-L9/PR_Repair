@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pr_repair.logging import log_event
+from pr_repair.logging import _EVENT_SINKS, add_event_sink, log_event, remove_event_sink
 from pr_repair.telemetry.trace import TraceRecorder
 
 
@@ -40,6 +40,43 @@ def test_to_list_is_json_serializable() -> None:
         log_event("e", n=1)
     dumped = recorder.to_list()
     assert dumped == [{"seq": 1, "event": "e", "fields": {"n": 1}}]
+
+
+def test_add_event_sink_is_idempotent() -> None:
+    seen: list[str] = []
+
+    def sink(event: str, fields: dict) -> None:
+        seen.append(event)
+
+    add_event_sink(sink)
+    add_event_sink(sink)  # duplicate registration must be a no-op
+    try:
+        assert _EVENT_SINKS.count(sink) == 1
+        log_event("once")
+    finally:
+        remove_event_sink(sink)
+    assert seen == ["once"]  # fired exactly once, not duplicated
+
+
+def test_remove_event_sink_detaches_completely() -> None:
+    seen: list[str] = []
+
+    def sink(event: str, fields: dict) -> None:
+        seen.append(event)
+
+    # Force-register twice by bypassing the idempotency guard to prove removal
+    # is complete regardless of how many copies exist.
+    _EVENT_SINKS.append(sink)
+    _EVENT_SINKS.append(sink)
+    remove_event_sink(sink)
+    try:
+        assert sink not in _EVENT_SINKS
+        log_event("after_stop")
+    finally:
+        # ensure no residue even if the assertion above failed
+        while sink in _EVENT_SINKS:
+            _EVENT_SINKS.remove(sink)
+    assert seen == []  # detached sink receives nothing
 
 
 def test_nested_recorders_are_independent() -> None:

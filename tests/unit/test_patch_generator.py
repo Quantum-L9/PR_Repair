@@ -82,6 +82,29 @@ def test_autofix_replacement_text_takes_precedence_over_suggested_fix(tmp_path: 
     ]
 
 
+def test_autofix_single_line_skips_when_file_unreadable(tmp_path: Path) -> None:
+    # Missing file -> no on-disk guard can be captured -> emit nothing (never fall
+    # back to finding.message as the exact-match guard).
+    finding = Finding(
+        finding_id="af-missing-1",
+        pr_number=1,
+        source_name=SourceName.agent_review,
+        source_priority=110,
+        severity=Severity.medium,
+        category="lint_failure",
+        message="some human readable message",
+        file_path="does_not_exist.py",
+        line_start=2,
+        line_end=2,
+        replacement_text="import os",
+        review_disposition=ReviewDisposition.autofix,
+        repairable=True,
+        fingerprint="fp-af-missing-1",
+    )
+
+    assert generate_patch_instructions(_plan([finding]), tmp_path) == []
+
+
 def test_autofix_multiline_skips_when_file_unreadable(tmp_path: Path) -> None:
     # File does not exist -> the on-disk block guard cannot be captured, so no
     # guard-less range patch is emitted.

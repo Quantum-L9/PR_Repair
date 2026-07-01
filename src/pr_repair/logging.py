@@ -14,11 +14,16 @@ _EVENT_SINKS: list[EventSink] = []
 
 
 def add_event_sink(sink: EventSink) -> None:
-    _EVENT_SINKS.append(sink)
+    # Idempotent registration: registering the same sink twice (e.g. start()
+    # called more than once) must not double-fan-out events to it.
+    if sink not in _EVENT_SINKS:
+        _EVENT_SINKS.append(sink)
 
 
 def remove_event_sink(sink: EventSink) -> None:
-    if sink in _EVENT_SINKS:
+    # Remove every occurrence so a sink is reliably detached even if it had
+    # somehow been registered more than once; stopping must be complete.
+    while sink in _EVENT_SINKS:
         _EVENT_SINKS.remove(sink)
 
 
