@@ -142,6 +142,8 @@ def _parse_content(finding: Finding, result: LLMResult) -> ProposedPatch:
 
 
 def _build_instruction(finding: Finding, data: dict[str, object]) -> dict[str, object] | None:
+    if finding.file_path is None:
+        return None
     if data.get("op") != "replace_range":
         return None
     line_start = data.get("line_start")
