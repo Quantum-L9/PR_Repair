@@ -8,9 +8,23 @@
 #
 # GitHub-Action-native PR repair actuation (Option A).
 #
-# Trigger: a code-review tool (or human) submits a review on a PR. The bot then
-# runs the deterministic repair pipeline (`pr-repair run`) against the canonical
-# agent_review_payload.json for that PR.
+# Trigger: a code-review tool (or human) submits a review on a PR. The bot first
+# normalizes that review into the canonical agent_review_payload.json via the
+# repo-owned entrypoint (`pr-repair ingest-review`), then runs the deterministic
+# repair pipeline (`pr-repair run`) against it. There is no dependency on a
+# pre-existing upstream payload.
+#
+# DATA FLOW:
+#   review event ($GITHUB_EVENT_PATH)
+#     -> pr-repair ingest-review  (detect tool -> fetch its unresolved threads
+#                                   via the GitHub API -> normalize -> validate)
+#     -> artifacts/agent_review_payload.json
+#     -> pr-repair run            (deterministic actuation over the payload)
+#
+# INGEST EXIT CONTRACT:
+#   0 -> payload produced      (downstream actuation runs)
+#   3 -> skipped               (no PR / no recognized review tool: skip cleanly)
+#   1 -> normalization failed  (review existed but is malformed: block downstream)
 #
 # SAFETY MODEL — every write gate is OFF by default:
 #   * mode          = dry_run   (no mutation) unless vars.PR_REPAIR_MODE overrides
@@ -21,11 +35,6 @@
 #                     the job is skipped entirely (opt-in, not opt-out).
 #   * fork guard    = same-repo PRs only. Fork PRs never receive repository
 #                     secrets and must never trigger writes against untrusted code.
-#
-# KNOWN GAP (honest): the per-tool review -> agent_review_payload.json normalizer
-# is not yet wired as a runtime entrypoint (see docs/actuation/validation_report.yaml).
-# Until it is, this workflow only actuates when an upstream step has produced the
-# payload; absent a payload it skips cleanly with a notice rather than failing.
 #
 # REQUIRED / OPTIONAL configuration:
 #   secrets.GITHUB_TOKEN            provided automatically by Actions (no setup).
@@ -78,20 +87,34 @@ jobs:
       - name: Install project
         run: uv pip install -e .
 
-      - name: Locate review payload
-        id: payload
+      - name: Normalize review into agent_review_payload.json
+        id: ingest
         env:
-          PR_FIX_PAYLOAD_PATH: artifacts/agent_review_payload.json
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ -f "$PR_FIX_PAYLOAD_PATH" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
+          # $GITHUB_EVENT_PATH is set automatically by Actions and points at the
+          # pull_request_review event JSON. The entrypoint fetches the tool's
+          # threads itself; no pre-existing payload is required.
+          set +e
+          uv run pr-repair ingest-review \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --output artifacts/agent_review_payload.json
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "status=produced" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" -eq 3 ]; then
+            echo "status=skipped" >> "$GITHUB_OUTPUT"
+            echo "::notice::No actionable review source on this event; skipping actuation cleanly."
           else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No $PR_FIX_PAYLOAD_PATH found; nothing to actuate. The review->payload normalizer entrypoint is a tracked gap."
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            echo "::error::Review normalization failed (exit $rc); blocking downstream actuation."
+            exit "$rc"
           fi
 
       - name: Run PR repair (dry-run, no writes by default)
-        if: steps.payload.outputs.present == 'true'
+        if: steps.ingest.outputs.status == 'produced'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -102,12 +125,19 @@ jobs:
           # Hardcoded off: this workflow never pushes. Pushing is a deliberate,
           # reviewed workflow change, not a toggle.
           PR_FIX_ALLOW_PUSH: '0'
-        run: uv run pr-repair run
+        run: |
+          # Fail closed if the produced payload is somehow absent/empty: the
+          # downstream bot must never run on a missing payload.
+          test -s artifacts/agent_review_payload.json \
+            || { echo "::error::expected payload is missing/empty"; exit 1; }
+          uv run pr-repair run
 
       - name: Upload run artifacts
-        if: always() && steps.payload.outputs.present == 'true'
+        if: always() && steps.ingest.outputs.status == 'produced'
         uses: actions/upload-artifact@v4
         with:
           name: pr-repair-runtime
-          path: runtime/pr_repair/
+          path: |
+            runtime/pr_repair/
+            artifacts/agent_review_payload.json
           if-no-files-found: ignore
