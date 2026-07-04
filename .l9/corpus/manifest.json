@@ -1,0 +1,34 @@
+{
+  "schema": "l9.corpus_manifest/v1",
+  "repo": "Quantum-L9/PR_Repair",
+  "role": "producer+consumer",
+  "produces": [
+    {
+      "channel": "findings",
+      "format": "agent-review-payload/v1",
+      "description": "Normalized PR findings with autofix candidates and manual review items"
+    },
+    {
+      "channel": "telemetry",
+      "format": "autofix-telemetry/v1",
+      "description": "Per-rule success rates, promotion candidates, false positive signals"
+    },
+    {
+      "channel": "learning",
+      "format": "learning-packets/v1",
+      "description": "Repeated failure patterns, agent recommendations, validator recommendations"
+    }
+  ],
+  "consumes": [
+    {
+      "channel": "rules",
+      "format": "compiled-rules/v1",
+      "description": "Compiled intelligence rules for classification and repair planning"
+    },
+    {
+      "channel": "policy",
+      "format": "harness-policy/v1",
+      "description": "Scanner rules and HITL matrix from the L9 Harness"
+    }
+  ]
+}
