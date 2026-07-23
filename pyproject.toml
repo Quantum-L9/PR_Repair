@@ -4,6 +4,7 @@ version = "0.4.0"
 description = "Deterministic Implementer Bot for L9-governed repositories."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "Proprietary" }
 dependencies = [
   "pydantic>=2.8",
   "python-dotenv>=1.0",
