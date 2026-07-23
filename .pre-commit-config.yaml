@@ -1,0 +1,16 @@
+# Pre-commit hooks — mechanical enforcement before commit
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+#
+# NOTE: .github/workflows/pr-checks.yml currently runs ruff in advisory mode
+# (continue-on-error) because of pre-existing findings on this repo. This
+# pre-commit hook still uses --fix so new/touched code gets cleaned up
+# incrementally without requiring a repo-wide cleanup PR first.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.5
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
