@@ -134,7 +134,7 @@ jobs:
 
       - name: Upload run artifacts
         if: always() && steps.ingest.outputs.status == 'produced'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pr-repair-runtime
           path: |
