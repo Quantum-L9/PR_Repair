@@ -126,7 +126,7 @@ jobs:
         continue-on-error: true
       - name: SonarQube scan
         if: steps.sonarcfg.outputs.configured == 'true'
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           # SONAR_HOST_URL: set as a repo/org variable for self-hosted SonarQube.
