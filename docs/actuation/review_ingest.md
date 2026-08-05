@@ -68,16 +68,35 @@ and re-asserts the payload is present and non-empty before invoking the bot — 
 the bot never runs on a missing payload. There is **no** dependency on a
 pre-existing upstream payload.
 
+In live mode the entrypoint also populates `pr.changed_files` from
+`/pulls/{n}/files` (reusing `pr_collector.load_changed_filenames`). This is
+**optional enrichment**: a transient files-API error degrades to `[]` with a
+notice rather than failing an otherwise-valid ingest (the review-thread fetch
+keeps its fail-closed behavior). In offline `--context` mode, `changed_files`
+is taken from the supplied `pr` block if present.
+
+## Per-tool enable gate
+
+Only **enabled** tools may actuate. The enabled set is resolved from
+`PR_FIX_TOOL_*` env (config parity: `copilot` on, the rest off) or an explicit
+`--enabled-tools copilot,sonarcloud`. A tool that is **detected but not enabled**
+is a clean **skip (exit 3)** — never a partial actuation. The workflow exposes
+these as repo variables (`PR_REPAIR_TOOL_<NAME>`) on the ingest step.
+
+### Live-channel audit (evidence: `tests/fixtures/tools/`)
+
+| Tool | Real channel (this repo) | Adapter reads | Status |
+|------|--------------------------|---------------|--------|
+| **Copilot** | inline **review threads** (`copilot-pull-request-reviewer`) | review threads | **Confirmed** — enabled by default; locked by `copilot_review_context.json` |
+| **SonarCloud** | **issue-comment** Quality-Gate summary (`sonarqubecloud[bot]`), no inline threads | review threads | **Disabled** — summary is not per-issue actionable (no path/line/rule). Needs SonarCloud PR inline decoration confirmed before enabling. Evidence: `sonar_issue_comment.json` |
+| **GitGuardian** | **ggshield CI check** only (no PR comment) | review threads | **Disabled** — needs the GitGuardian App (inline PR comments) confirmed before enabling |
+| **CodeRabbit** | not installed in scope | review threads | **Disabled / Unknown** — no live source to confirm |
+
+To enable a tool for a repo: confirm its inline-review-thread shape against a
+real PR, add a fixture + adapter test, then set `PR_REPAIR_TOOL_<NAME>=true`
+(repo variable) or pass `--enabled-tools`. Do not enable on assumed shapes.
+
 ## Logging / secret hygiene
 
 Only finding **counts** and the output path are logged. Review bodies (which may
 quote secrets) and tokens are never printed.
-
-## Unknowns / follow-ups
-
-- `changed_files` is intentionally omitted from the `pr` block here (optional in
-  the schema); the downstream collector derives changed files itself.
-- Non-Copilot adapters (CodeRabbit / Sonar / GitGuardian) share the same
-  `get_review_threads` read path and are wired, but their live native shapes
-  should be confirmed against real fixtures before enabling those tools in
-  `config.py`.

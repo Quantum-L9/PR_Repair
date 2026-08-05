@@ -231,6 +231,88 @@ def test_no_input_source_fails(tmp_path):
     assert rc == review_ingest.EXIT_FAILED
 
 
+# --- changed_files enrichment ----------------------------------------------
+
+class _FakeConnWithFiles(_FakeConn):
+    def __init__(self, threads, files):
+        super().__init__(threads)
+        self._files = files
+
+    def get_pr_changed_files(self, owner, repo, pr):
+        return self._files
+
+
+def test_changed_files_populated_in_live_mode(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(_event()), encoding="utf-8")
+    out = tmp_path / "payload.json"
+    conn = _FakeConnWithFiles(
+        [_thread("Fix.\n```suggestion\nok\n```")],
+        # Only "filename" keys are kept; entries without one are dropped.
+        [{"filename": "a.py"}, {"filename": "b.py"}, {"status": "removed"}],
+    )
+
+    rc = review_ingest.run(
+        output=str(out), event_path=str(event_path), generated_at=FIXED_TS,
+        connector_factory=lambda token: conn,
+    )
+
+    assert rc == review_ingest.EXIT_PRODUCED
+    assert PayloadParser(out).parse().pr_ref.changed_files == ["a.py", "b.py"]
+
+
+def test_changed_files_absent_when_connector_lacks_method(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(_event()), encoding="utf-8")
+    out = tmp_path / "payload.json"
+
+    # _FakeConn has no get_pr_changed_files -> graceful [].
+    rc = review_ingest.run(
+        output=str(out), event_path=str(event_path), generated_at=FIXED_TS,
+        connector_factory=lambda token: _FakeConn([_thread("plain")]),
+    )
+
+    assert rc == review_ingest.EXIT_PRODUCED
+    assert PayloadParser(out).parse().pr_ref.changed_files == []
+
+
+def test_changed_files_best_effort_on_fetch_error(tmp_path, monkeypatch):
+    import requests
+
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(_event()), encoding="utf-8")
+    out = tmp_path / "payload.json"
+
+    class _RaisingFiles(_FakeConn):
+        def get_pr_changed_files(self, owner, repo, pr):
+            raise requests.RequestException("boom")
+
+    rc = review_ingest.run(
+        output=str(out), event_path=str(event_path), generated_at=FIXED_TS,
+        connector_factory=lambda token: _RaisingFiles([_thread("plain")]),
+    )
+
+    # An optional-field fetch failure must NOT block an otherwise-valid ingest.
+    assert rc == review_ingest.EXIT_PRODUCED
+    assert PayloadParser(out).parse().pr_ref.changed_files == []
+
+
+def test_changed_files_preserved_in_context_mode(tmp_path):
+    pr_with_files = dict(_PR, changed_files=["svc/x.py", "svc/y.py"])
+    ctx = {"tool": "copilot", "pr": pr_with_files, "threads": []}
+    ctx_path = tmp_path / "ctx.json"
+    ctx_path.write_text(json.dumps(ctx), encoding="utf-8")
+    out = tmp_path / "payload.json"
+
+    rc = review_ingest.run(output=str(out), context=str(ctx_path), generated_at=FIXED_TS)
+
+    assert rc == review_ingest.EXIT_PRODUCED
+    assert PayloadParser(out).parse().pr_ref.changed_files == ["svc/x.py", "svc/y.py"]
+
+
 # --- CLI surface -----------------------------------------------------------
 
 def test_main_entrypoint_runs_context_mode(tmp_path):
@@ -266,3 +348,69 @@ def test_output_json_is_deterministic(tmp_path):
     review_ingest.run(output=str(second), context=str(ctx_path), generated_at=FIXED_TS)
 
     assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
+
+
+# --- enabled-tools gate ----------------------------------------------------
+
+_TOOL_VARS = (
+    "PR_FIX_TOOL_COPILOT", "PR_FIX_TOOL_CODERABBIT",
+    "PR_FIX_TOOL_SONARCLOUD", "PR_FIX_TOOL_GITGUARDIAN",
+)
+
+
+def test_enabled_tools_from_env_defaults(monkeypatch):
+    for var in _TOOL_VARS:
+        monkeypatch.delenv(var, raising=False)
+    # Config parity: copilot on, the rest off until confirmed per-repo.
+    assert review_ingest.enabled_tools_from_env() == {"copilot"}
+
+
+def test_enabled_tools_from_env_opt_in(monkeypatch):
+    for var in _TOOL_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("PR_FIX_TOOL_SONARCLOUD", "1")
+    assert review_ingest.enabled_tools_from_env() == {"copilot", "sonarcloud"}
+
+
+def test_detected_but_disabled_tool_skips(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    for var in _TOOL_VARS:
+        monkeypatch.delenv(var, raising=False)  # defaults: only copilot enabled
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(_event(review_login="sonarcloud[bot]")), encoding="utf-8")
+    out = tmp_path / "payload.json"
+
+    rc = review_ingest.run(
+        output=str(out), event_path=str(event_path),
+        connector_factory=lambda token: _FakeConn([_thread("issue (python:S1192)", login="sonarcloud[bot]")]),
+    )
+
+    assert rc == review_ingest.EXIT_SKIPPED  # sonarcloud detected but not enabled
+    assert not out.exists()
+
+
+def test_explicitly_enabled_tool_actuates(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    event_path = tmp_path / "event.json"
+    event_path.write_text(json.dumps(_event(review_login="sonarcloud[bot]")), encoding="utf-8")
+    out = tmp_path / "payload.json"
+    thread = _thread("Define a constant (python:S1192).", login="sonarcloud[bot]")
+
+    rc = review_ingest.run(
+        output=str(out), event_path=str(event_path), enabled_tools={"sonarcloud"},
+        generated_at=FIXED_TS, connector_factory=lambda token: _FakeConn([thread]),
+    )
+
+    assert rc == review_ingest.EXIT_PRODUCED
+    parsed = PayloadParser(out).parse()
+    assert parsed.manual_review_findings[0].tool == "sonarcloud"
+
+
+def test_cli_parses_enabled_tools_flag():
+    from pr_repair.cli import build_parser
+
+    args = build_parser().parse_args(
+        ["ingest-review", "--output", "p.json", "--context", "c.json",
+         "--enabled-tools", "copilot,sonarcloud"]
+    )
+    assert args.enabled_tools == "copilot,sonarcloud"

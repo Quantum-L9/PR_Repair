@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pr_repair.config import AppConfig
 from pr_repair.connectors.github import GitHubConnector
 from pr_repair.logging import log_event
@@ -61,24 +63,37 @@ def collect_candidate_prs(
     return limited
 
 
-def _load_changed_files_if_supported(
-    github_connector: GitHubConnector,
-    pr: PRRef,
+def load_changed_filenames(
+    connector: Any,
+    repo_owner: str,
+    repo_name: str,
+    pr_number: int,
 ) -> list[str]:
-    if not hasattr(github_connector, "get_pr_changed_files"):
+    """Fetch a PR's changed filenames as a flat list, or [] if unavailable.
+
+    Returns [] when the connector does not expose ``get_pr_changed_files`` (e.g.
+    a static/offline connector), so callers can treat changed files as optional
+    enrichment. Reused by the review-ingest entrypoint and PR prioritization.
+    """
+    if not hasattr(connector, "get_pr_changed_files"):
         return []
 
-    raw_files = github_connector.get_pr_changed_files(
-        pr.repo_owner,
-        pr.repo_name,
-        pr.pr_number,
-    )
+    raw_files = connector.get_pr_changed_files(repo_owner, repo_name, pr_number)
     changed_files: list[str] = []
     for raw_file in raw_files:
         filename = raw_file.get("filename")
         if isinstance(filename, str) and filename:
             changed_files.append(filename)
     return changed_files
+
+
+def _load_changed_files_if_supported(
+    github_connector: GitHubConnector,
+    pr: PRRef,
+) -> list[str]:
+    return load_changed_filenames(
+        github_connector, pr.repo_owner, pr.repo_name, pr.pr_number
+    )
 
 
 def _score_pr(pr: PRRef) -> int:
