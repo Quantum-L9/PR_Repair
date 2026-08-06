@@ -276,7 +276,13 @@ def _post_implementer_comment(config: AppConfig, pr: PRRef, body: str) -> None:
         connector = GitHubConnector(config.github_token)
         upsert_implementer_comment(connector, pr, body)
         log_event("implementer_comment_upserted", pr_number=pr.pr_number)
-    except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:  # posting must never break local pipeline
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+    ) as exc:  # posting must never break local pipeline
         log_event("implementer_comment_failed", pr_number=pr.pr_number, error=str(exc))
 
 
