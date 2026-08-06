@@ -27,9 +27,9 @@ def classify_path_tier(path: str, repo_context: RepoContext) -> TierLevel:
         return TierLevel.t5
     if path.startswith(".github/workflows/"):
         return TierLevel.t2
-    if path.startswith("tests/") or path.startswith("tools/"):
+    if path.startswith(("tests/", "tools/")):
         return TierLevel.t2
-    if path.startswith("app/engines/") or path.startswith("app/score/") or path.startswith("app/health/") or path.startswith("app/services/"):
+    if path.startswith(("app/engines/", "app/score/", "app/health/", "app/services/")):
         return TierLevel.t3
     if path.startswith("app/api/") or path == "app/main.py":
         return TierLevel.t3

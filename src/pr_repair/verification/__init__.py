@@ -15,7 +15,7 @@ from pr_repair.verification.report_builder import (
 )
 
 __all__ = [
-    "run_verification",
-    "build_verification_markdown",
     "build_pr_result_markdown",
+    "build_verification_markdown",
+    "run_verification",
 ]

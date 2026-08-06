@@ -37,8 +37,8 @@ from pr_repair.planning.llm_proposer import propose_repairs
 from pr_repair.planning.repair_planner import build_repair_plan
 from pr_repair.priorities import SOURCE_PRIORITY
 from pr_repair.repair.repair_executor import execute_repair_plan
-from pr_repair.routing.fix_matrix import FixStrategy, FixStrategyRegistry, load_fix_matrix
 from pr_repair.repo_context.loader import load_repo_context
+from pr_repair.routing.fix_matrix import FixStrategy, FixStrategyRegistry, load_fix_matrix
 from pr_repair.state_store import StateStore
 from pr_repair.tools.base import ToolAdapter
 from pr_repair.tools.responder import ResponderResult, ToolThreadResponder
@@ -113,22 +113,36 @@ def run_tool_actuation(
     # Deterministic autofix lane: plan + execute (verify/rollback) when permitted.
     if route.autofix:
         plan = build_repair_plan(pr_ref, route.autofix, config)
-        execution = execute_repair_plan(plan, config, repo_root) if config.mode in _REPAIR_MODES else None
+        execution = (
+            execute_repair_plan(plan, config, repo_root) if config.mode in _REPAIR_MODES else None
+        )
         applied = set(execution.modified_files) if execution is not None else set()
         commit_sha = _commit_sha(execution.push_result) if execution is not None else None
         for finding in route.autofix:
             strategy = strategies[finding.finding_id]
-            if execution is not None and execution.status == "completed" and finding.file_path in applied:
+            if (
+                execution is not None
+                and execution.status == "completed"
+                and finding.file_path in applied
+            ):
                 result = responder.respond(pr_ref, finding, "fixed", commit_sha=commit_sha)
             else:
                 result = responder.respond(
-                    pr_ref, finding, "justified_skip",
+                    pr_ref,
+                    finding,
+                    "justified_skip",
                     detail="Deterministic autofix did not apply (gated or verification failed); left for review.",
                 )
             responses.append(result)
             _write_fix_report(
-                store, pr_ref, finding, result, strategy,
-                resolved=None, execution=execution, commit_sha=commit_sha,
+                store,
+                pr_ref,
+                finding,
+                result,
+                strategy,
+                resolved=None,
+                execution=execution,
+                commit_sha=commit_sha,
             )
 
     # Manual lane: resolve each finding to a model tier/depth (EIE-style), emit an
@@ -156,7 +170,10 @@ def run_tool_actuation(
                 resolution_reason=resolved.resolution_reason,
             )
         proposals = propose_repairs(
-            route.manual, build_llm_client(config), repo_root, config.llm_client_id,
+            route.manual,
+            build_llm_client(config),
+            repo_root,
+            config.llm_client_id,
             resolved_by_id=resolved_by_id,
         )
         by_id = {p.finding_id: p for p in proposals}
@@ -170,13 +187,21 @@ def run_tool_actuation(
                 )
             else:
                 result = responder.respond(
-                    pr_ref, finding, "justified_skip",
+                    pr_ref,
+                    finding,
+                    "justified_skip",
                     detail="No bounded automated fix available; needs human review.",
                 )
             responses.append(result)
             _write_fix_report(
-                store, pr_ref, finding, result, strategies[finding.finding_id],
-                resolved=resolved, execution=None, commit_sha=None,
+                store,
+                pr_ref,
+                finding,
+                result,
+                strategies[finding.finding_id],
+                resolved=resolved,
+                execution=None,
+                commit_sha=None,
             )
 
     return DispatchResult(
@@ -250,13 +275,17 @@ def _write_fix_report(
         "file_path": finding.file_path,
         "line_start": finding.line_start,
         "line_end": finding.line_end,
-        "outcome": "fixed" if result.resolved else ("proposed" if "Proposal" in result.body else "justified_skip"),
+        "outcome": "fixed"
+        if result.resolved
+        else ("proposed" if "Proposal" in result.body else "justified_skip"),
         "strategy": {
             "kind": strategy.kind,
             "handler": strategy.handler,
             "matched_by": strategy.matched_by,
         },
-        "change": {"replacement_text": finding.replacement_text} if finding.replacement_text else None,
+        "change": {"replacement_text": finding.replacement_text}
+        if finding.replacement_text
+        else None,
         "commit_sha": commit_sha,
         "thread": {
             "thread_id": finding.thread_id,

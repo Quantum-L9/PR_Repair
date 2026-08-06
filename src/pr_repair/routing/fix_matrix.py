@@ -45,12 +45,12 @@ class FixStrategy:
     """A resolved handling decision for one finding."""
 
     kind: StrategyKind
-    handler: str | None = None            # deterministic handler name
-    task_type: str | None = None          # llm
-    tier: str | None = None               # llm model/tier hint
-    depth: str | None = None              # llm search/context depth
+    handler: str | None = None  # deterministic handler name
+    task_type: str | None = None  # llm
+    tier: str | None = None  # llm model/tier hint
+    depth: str | None = None  # llm search/context depth
     risk: str | None = None
-    matched_by: str = "no_match"          # audit: which dimension matched
+    matched_by: str = "no_match"  # audit: which dimension matched
 
 
 _PROPOSE_ONLY = FixStrategy(kind="propose_only", matched_by="no_match")

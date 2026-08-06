@@ -65,7 +65,9 @@ def build_autofix_telemetry(
     for rule_id in sorted(by_rule):
         stats = by_rule[rule_id]
         stats.success_rate = round(stats.verified / stats.attempted, 4) if stats.attempted else 0.0
-        stats.promotable = stats.attempted > 0 and stats.verified == stats.attempted and stats.false_positive == 0
+        stats.promotable = (
+            stats.attempted > 0 and stats.verified == stats.attempted and stats.false_positive == 0
+        )
         if stats.promotable:
             promotion_candidates.append(rule_id)
         for key in totals:
@@ -76,7 +78,5 @@ def build_autofix_telemetry(
         "rules": rules,
         "totals": totals,
         "promotion_candidates": promotion_candidates,
-        "false_positive_rules": sorted(
-            {r["rule_id"] for r in rules if r["false_positive"] > 0}
-        ),
+        "false_positive_rules": sorted({r["rule_id"] for r in rules if r["false_positive"] > 0}),
     }

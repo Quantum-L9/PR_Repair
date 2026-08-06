@@ -17,14 +17,14 @@ from pr_repair.tools.responder import ResponderResult, ToolThreadResponder
 from pr_repair.tools.sonar import SonarAdapter
 
 __all__ = [
-    "ToolAdapter",
-    "extract_suggestion",
-    "CopilotAdapter",
     "CodeRabbitAdapter",
-    "SonarAdapter",
+    "CopilotAdapter",
     "GitGuardianAdapter",
+    "ResponderResult",
+    "SonarAdapter",
+    "ToolAdapter",
+    "ToolThreadResponder",
     "adapter_for_event",
     "adapter_for_tool",
-    "ResponderResult",
-    "ToolThreadResponder",
+    "extract_suggestion",
 ]

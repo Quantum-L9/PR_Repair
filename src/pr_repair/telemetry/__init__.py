@@ -12,8 +12,8 @@ from pr_repair.telemetry.autofix import RuleTelemetry, build_autofix_telemetry
 from pr_repair.telemetry.trace import TraceEvent, TraceRecorder
 
 __all__ = [
-    "TraceRecorder",
-    "TraceEvent",
     "RuleTelemetry",
+    "TraceEvent",
+    "TraceRecorder",
     "build_autofix_telemetry",
 ]

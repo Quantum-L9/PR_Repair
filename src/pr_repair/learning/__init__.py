@@ -13,7 +13,7 @@ from pr_repair.learning.pattern_extractor import extract_learning_packets
 from pr_repair.learning.validator_recommender import build_validator_recommendations
 
 __all__ = [
-    "extract_learning_packets",
     "build_agent_md_recommendations",
     "build_validator_recommendations",
+    "extract_learning_packets",
 ]

@@ -13,6 +13,7 @@ This module reads policy (scanner-rules, HITL matrix) and compiled rules
 from the shared corpus directory, enabling PR_Repair to respect harness
 governance without manual configuration.
 """
+
 from __future__ import annotations
 
 import json
@@ -47,13 +48,14 @@ def _read_yaml(path: Path) -> dict[str, Any] | None:
         log.debug("corpus: %s not found, skipping", path)
         return None
     try:
-        import yaml  # noqa: PLC0415
+        import yaml
+
         data = yaml.safe_load(path.read_text())
         if not isinstance(data, dict):
             log.warning("corpus: %s is not a YAML mapping, skipping", path)
             return None
         return data
-    except Exception as exc:
+    except (OSError, ValueError, TypeError, KeyError) as exc:
         log.warning("corpus: failed to read %s: %s", path, exc)
         return None
 

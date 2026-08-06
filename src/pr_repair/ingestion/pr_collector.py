@@ -7,7 +7,6 @@ from pr_repair.connectors.github import GitHubConnector
 from pr_repair.logging import log_event
 from pr_repair.types import PRRef
 
-
 _PRIORITY_LABEL_WEIGHTS = {
     "requested-changes": 60,
     "bug": 40,
@@ -91,9 +90,7 @@ def _load_changed_files_if_supported(
     github_connector: GitHubConnector,
     pr: PRRef,
 ) -> list[str]:
-    return load_changed_filenames(
-        github_connector, pr.repo_owner, pr.repo_name, pr.pr_number
-    )
+    return load_changed_filenames(github_connector, pr.repo_owner, pr.repo_name, pr.pr_number)
 
 
 def _score_pr(pr: PRRef) -> int:

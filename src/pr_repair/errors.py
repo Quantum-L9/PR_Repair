@@ -38,5 +38,3 @@ class PayloadIngestionError(PRRepairError):
     The pipeline treats this as a fail-closed signal: no repairs are attempted
     when the canonical payload contract cannot be satisfied.
     """
-
-    pass

@@ -13,6 +13,7 @@ This module writes normalized findings, telemetry, and learning packets
 to the shared corpus directory, enabling automatic consumption by
 @l9/harness and l9-ci-debt-lsp without PRs, CI, or manual intervention.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,7 +43,11 @@ def _write_payload(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     tmp.rename(path)
-    log.info("corpus: wrote %s (%d bytes)", path.relative_to(path.parent.parent.parent), path.stat().st_size)
+    log.info(
+        "corpus: wrote %s (%d bytes)",
+        path.relative_to(path.parent.parent.parent),
+        path.stat().st_size,
+    )
 
 
 def write_findings(repo_root: Path, findings_payload: dict[str, Any]) -> Path:

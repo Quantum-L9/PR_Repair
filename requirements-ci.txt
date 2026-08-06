@@ -1,0 +1,10 @@
+# Consumed by l9-lint-test / l9-analysis via `pip install -r requirements-ci.txt`.
+# Editable install pulls runtime deps (pydantic ships PEP 561 types) so mypy
+# strict does not treat BaseModel as Any under --ignore-missing-imports.
+-e .
+mypy>=1.11
+types-requests
+types-PyYAML
+ruff>=0.6
+pytest>=8
+pytest-cov

@@ -16,8 +16,8 @@ from pr_repair.output.artifact_writer import (
 from pr_repair.output.pr_commentary import build_pr_comment
 
 __all__ = [
+    "build_pr_comment",
+    "write_learning_artifacts",
     "write_pr_artifacts",
     "write_run_artifacts",
-    "write_learning_artifacts",
-    "build_pr_comment",
 ]

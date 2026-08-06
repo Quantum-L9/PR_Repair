@@ -75,7 +75,7 @@ class AppConfig(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_config(self) -> "AppConfig":
+    def validate_config(self) -> AppConfig:
         if self.allow_push and self.mode is not ExecutionMode.repair_verify_and_push:
             msg = "PR_FIX_ALLOW_PUSH requires mode=repair_verify_and_push"
             raise ValueError(msg)
@@ -103,16 +103,16 @@ def load_config(dotenv_path: str = ".env.local") -> AppConfig:
         msg = "Missing GITHUB_REPOSITORY"
         raise ValueError(msg)
 
-    verify_command = resolve_verify_command_from_env(os.getenv("PR_FIX_VERIFY_COMMAND", "make agent-check"))
+    verify_command = resolve_verify_command_from_env(
+        os.getenv("PR_FIX_VERIFY_COMMAND", "make agent-check")
+    )
     mode = ExecutionMode(os.getenv("PR_FIX_MODE", ExecutionMode.dry_run.value))
     write_ceiling = TierLevel(os.getenv("PR_FIX_WRITE_CEILING", TierLevel.t1.value))
 
     return AppConfig(
         github_token=github_token,
         github_repository=github_repository,
-        payload_path=Path(
-            os.getenv("PR_FIX_PAYLOAD_PATH", "artifacts/agent_review_payload.json")
-        ),
+        payload_path=Path(os.getenv("PR_FIX_PAYLOAD_PATH", "artifacts/agent_review_payload.json")),
         post_comment=os.getenv("PR_FIX_POST_COMMENT", "0") == "1",
         llm_enabled=os.getenv("PR_FIX_LLM_ENABLED", "0") == "1",
         llm_apply=os.getenv("PR_FIX_LLM_APPLY", "0") == "1",

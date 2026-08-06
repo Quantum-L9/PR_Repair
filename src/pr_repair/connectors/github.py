@@ -73,30 +73,40 @@ class GitHubConnector:
             )
         return items
 
-    def get_pr_changed_files(self, repo_owner: str, repo_name: str, pr_number: int) -> list[dict[str, Any]]:
+    def get_pr_changed_files(
+        self, repo_owner: str, repo_name: str, pr_number: int
+    ) -> list[dict[str, Any]]:
         payload = self._get(
             f"/repos/{repo_owner}/{repo_name}/pulls/{pr_number}/files",
             params={"per_page": 100},
         )
         return [item for item in payload if isinstance(item, dict)]
 
-    def get_pr_check_runs(self, repo_owner: str, repo_name: str, pr_number: int) -> list[dict[str, Any]]:
+    def get_pr_check_runs(
+        self, repo_owner: str, repo_name: str, pr_number: int
+    ) -> list[dict[str, Any]]:
         pr_payload = self._get(f"/repos/{repo_owner}/{repo_name}/pulls/{pr_number}")
         head_sha = str(pr_payload["head"]["sha"])
         return self.get_check_runs(repo_owner, repo_name, head_sha)
 
-    def get_check_runs(self, repo_owner: str, repo_name: str, head_sha: str) -> list[dict[str, Any]]:
+    def get_check_runs(
+        self, repo_owner: str, repo_name: str, head_sha: str
+    ) -> list[dict[str, Any]]:
         payload = self._get(f"/repos/{repo_owner}/{repo_name}/commits/{head_sha}/check-runs")
         runs = payload.get("check_runs", [])
         if not isinstance(runs, list):
             return []
         return [item for item in runs if isinstance(item, dict)]
 
-    def get_review_comments(self, repo_owner: str, repo_name: str, pr_number: int) -> list[dict[str, Any]]:
+    def get_review_comments(
+        self, repo_owner: str, repo_name: str, pr_number: int
+    ) -> list[dict[str, Any]]:
         payload = self._get(f"/repos/{repo_owner}/{repo_name}/pulls/{pr_number}/comments")
         return [item for item in payload if isinstance(item, dict)]
 
-    def get_review_threads(self, repo_owner: str, repo_name: str, pr_number: int) -> list[dict[str, Any]]:
+    def get_review_threads(
+        self, repo_owner: str, repo_name: str, pr_number: int
+    ) -> list[dict[str, Any]]:
         query = """
         query($owner: String!, $repo: String!, $pr: Int!) {
           repository(owner: $owner, name: $repo) {
@@ -137,11 +147,15 @@ class GitHubConnector:
             return []
         return [item for item in nodes if isinstance(item, dict)]
 
-    def get_issue_comments(self, repo_owner: str, repo_name: str, pr_number: int) -> list[dict[str, Any]]:
+    def get_issue_comments(
+        self, repo_owner: str, repo_name: str, pr_number: int
+    ) -> list[dict[str, Any]]:
         payload = self._get(f"/repos/{repo_owner}/{repo_name}/issues/{pr_number}/comments")
         return [item for item in payload if isinstance(item, dict)]
 
-    def post_pr_comment(self, repo_owner: str, repo_name: str, pr_number: int, body: str) -> dict[str, Any]:
+    def post_pr_comment(
+        self, repo_owner: str, repo_name: str, pr_number: int, body: str
+    ) -> dict[str, Any]:
         response = self._session.post(
             f"{self._base_url}/repos/{repo_owner}/{repo_name}/issues/{pr_number}/comments",
             json={"body": body},
@@ -150,7 +164,7 @@ class GitHubConnector:
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
-            raise ValueError("unexpected GitHub comment response payload")
+            raise TypeError("unexpected GitHub comment response payload")
         return payload
 
     def update_issue_comment(
@@ -164,7 +178,7 @@ class GitHubConnector:
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
-            raise ValueError("unexpected GitHub comment response payload")
+            raise TypeError("unexpected GitHub comment response payload")
         return payload
 
     def reply_to_review_comment(
@@ -184,7 +198,7 @@ class GitHubConnector:
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
-            raise ValueError("unexpected GitHub reply response payload")
+            raise TypeError("unexpected GitHub reply response payload")
         return payload
 
     def resolve_review_thread(self, thread_id: str) -> dict[str, Any]:
@@ -207,7 +221,7 @@ class GitHubConnector:
         payload = self._graphql(query=query, variables={"threadId": thread_id})
         thread = payload.get("data", {}).get(mutation_name, {}).get("thread", {})
         if not isinstance(thread, dict):
-            raise ValueError("unexpected GitHub GraphQL thread payload")
+            raise TypeError("unexpected GitHub GraphQL thread payload")
         return thread
 
     def delete_issue_comment(self, repo_owner: str, repo_name: str, comment_id: int) -> None:
@@ -224,7 +238,7 @@ class GitHubConnector:
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, (list, dict)):
-            raise ValueError("unexpected GitHub API response payload")
+            raise TypeError("unexpected GitHub API response payload")
         return payload
 
     def _graphql(self, query: str, variables: dict[str, object]) -> dict[str, Any]:
@@ -236,7 +250,7 @@ class GitHubConnector:
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
-            raise ValueError("unexpected GitHub GraphQL response payload")
+            raise TypeError("unexpected GitHub GraphQL response payload")
         if "errors" in payload:
             raise ValueError(f"GitHub GraphQL returned errors: {payload['errors']}")
         return payload

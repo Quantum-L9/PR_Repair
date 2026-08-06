@@ -53,7 +53,9 @@ def build_agent_md_recommendations(packets: list[LearningPacket]) -> dict[str, o
         "sections": {
             "recurring_mistakes": unique_recurring,
             "stronger_preflight_rules": unique_rules,
-            "repo_specific_do_not_repeat_rules": list(dict.fromkeys(repo_specific_do_not_repeat_rules)),
+            "repo_specific_do_not_repeat_rules": list(
+                dict.fromkeys(repo_specific_do_not_repeat_rules)
+            ),
             "common_test_requirements": list(dict.fromkeys(common_test_requirements)),
             "comment_handling_priorities": list(dict.fromkeys(comment_handling_priorities)),
         },

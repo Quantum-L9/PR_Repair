@@ -24,8 +24,6 @@ from pr_repair.llm.client import LLMClient
 from pr_repair.llm.contract import ProposedPatch
 from pr_repair.logging import configure_logging, log_event
 from pr_repair.orchestration.router import route_findings
-from pr_repair.planning.llm_proposer import propose_repairs
-from pr_repair.repair.llm_apply import Proposal, apply_llm_proposals, is_apply_eligible
 from pr_repair.output.artifact_writer import (
     write_learning_artifacts,
     write_pr_artifacts,
@@ -33,7 +31,10 @@ from pr_repair.output.artifact_writer import (
 )
 from pr_repair.output.pr_commentary import build_pr_comment, upsert_implementer_comment
 from pr_repair.planning.approval_gate import requires_human_approval
+from pr_repair.planning.llm_proposer import propose_repairs
 from pr_repair.planning.repair_planner import build_repair_plan
+from pr_repair.repair.llm_apply import Proposal, apply_llm_proposals, is_apply_eligible
+from pr_repair.repair.repair_executor import execute_repair_plan
 from pr_repair.repo_context.loader import load_repo_context
 from pr_repair.runtime import RuntimeManager
 from pr_repair.state_store import StateStore
@@ -47,7 +48,6 @@ from pr_repair.types import (
     RepoContext,
     RuntimeState,
 )
-from pr_repair.repair.repair_executor import execute_repair_plan
 
 
 def run_pipeline(config: AppConfig) -> int:
@@ -73,7 +73,9 @@ def run_pipeline(config: AppConfig) -> int:
     recorder = TraceRecorder()
     recorder.start()
     try:
-        return _run_pipeline_traced(config, repo_root, repo_context, store, runtime_manager, run_state)
+        return _run_pipeline_traced(
+            config, repo_root, repo_context, store, runtime_manager, run_state
+        )
     finally:
         recorder.stop()
         # Trace emission is best-effort and must never mask the run's real exit code.
@@ -274,7 +276,13 @@ def _post_implementer_comment(config: AppConfig, pr: PRRef, body: str) -> None:
         connector = GitHubConnector(config.github_token)
         upsert_implementer_comment(connector, pr, body)
         log_event("implementer_comment_upserted", pr_number=pr.pr_number)
-    except Exception as exc:  # posting must never break the local repair pipeline
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+    ) as exc:  # posting must never break local pipeline
         log_event("implementer_comment_failed", pr_number=pr.pr_number, error=str(exc))
 
 

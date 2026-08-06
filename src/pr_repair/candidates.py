@@ -27,7 +27,9 @@ def build_repair_candidates(
         digest = hashlib.sha256(
             json.dumps([cluster.pr_number, cluster.cluster_id], sort_keys=True).encode("utf-8")
         ).hexdigest()[:16]
-        approval_required = cluster.repairability != "auto_repairable" or cluster.risk_level != "low"
+        approval_required = (
+            cluster.repairability != "auto_repairable" or cluster.risk_level != "low"
+        )
         candidates.append(
             RepairCandidate(
                 candidate_id=f"candidate-{digest}",

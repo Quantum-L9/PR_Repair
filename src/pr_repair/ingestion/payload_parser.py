@@ -40,9 +40,7 @@ from pr_repair.types import (
 )
 
 DEFAULT_PAYLOAD_PATH = Path("artifacts/agent_review_payload.json")
-SCHEMA_PATH = (
-    Path(__file__).resolve().parents[3] / "contracts" / "agent-review-payload.schema.json"
-)
+SCHEMA_PATH = Path(__file__).resolve().parents[3] / "contracts" / "agent-review-payload.schema.json"
 
 
 class ParsedPayload(BaseModel):
@@ -150,10 +148,7 @@ class PayloadParser:
         if errors:
             first = errors[0]
             location = "/".join(str(part) for part in first.absolute_path) or "<root>"
-            msg = (
-                f"agent review payload failed schema validation at '{location}': "
-                f"{first.message}"
-            )
+            msg = f"agent review payload failed schema validation at '{location}': {first.message}"
             raise PayloadIngestionError(msg)
 
     # -- parsing -------------------------------------------------------------
@@ -203,7 +198,9 @@ class PayloadParser:
             thread_id=item.get("thread_id"),
             comment_id=item.get("comment_id"),
             repairable=is_autofix,
-            confidence=float(confidence) if confidence is not None else (1.0 if is_autofix else 0.7),
+            confidence=float(confidence)
+            if confidence is not None
+            else (1.0 if is_autofix else 0.7),
             fingerprint="pending",
         )
         return finding.model_copy(update={"fingerprint": build_finding_fingerprint(finding)})

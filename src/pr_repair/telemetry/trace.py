@@ -20,7 +20,7 @@ proposal, comment upsert -- lands in the trace with no extra instrumentation.
 from __future__ import annotations
 
 from types import TracebackType
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, Field
 
@@ -42,9 +42,7 @@ class TraceRecorder:
 
     def record(self, event: str, fields: dict[str, Any]) -> None:
         self._seq += 1
-        self._events.append(
-            TraceEvent(seq=self._seq, event=event, fields=_json_safe(fields))
-        )
+        self._events.append(TraceEvent(seq=self._seq, event=event, fields=_json_safe(fields)))
 
     def events(self) -> list[TraceEvent]:
         return list(self._events)
@@ -58,7 +56,7 @@ class TraceRecorder:
     def stop(self) -> None:
         remove_event_sink(self.record)
 
-    def __enter__(self) -> "TraceRecorder":
+    def __enter__(self) -> Self:
         self.start()
         return self
 
@@ -78,7 +76,9 @@ def _json_safe(fields: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, (str, int, float, bool)) or value is None:
             safe[key] = value
         elif isinstance(value, (list, tuple)):
-            safe[key] = [v if isinstance(v, (str, int, float, bool)) or v is None else str(v) for v in value]
+            safe[key] = [
+                v if isinstance(v, (str, int, float, bool)) or v is None else str(v) for v in value
+            ]
         else:
             safe[key] = str(value)
     return safe

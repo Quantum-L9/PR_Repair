@@ -13,6 +13,6 @@ from pr_repair.normalization.normalizer import normalize_bundle, normalize_findi
 
 __all__ = [
     "build_finding_fingerprint",
-    "normalize_finding",
     "normalize_bundle",
+    "normalize_finding",
 ]

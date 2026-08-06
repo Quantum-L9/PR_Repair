@@ -21,8 +21,8 @@ __all__ = [
     "checkout_pr_branch",
     "commit_changes",
     "create_backup_ref",
-    "push_changes",
-    "rollback_to_backup",
     "ensure_clean_worktree",
     "list_modified_files",
+    "push_changes",
+    "rollback_to_backup",
 ]

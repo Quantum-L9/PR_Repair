@@ -65,8 +65,7 @@ def propose_repairs(
 
     results_by_id = {result.finding_id: result for result in results}
     proposals = [
-        _to_proposal(finding, results_by_id.get(finding.finding_id))
-        for finding in eligible
+        _to_proposal(finding, results_by_id.get(finding.finding_id)) for finding in eligible
     ]
     log_event(
         "llm_proposals_complete",

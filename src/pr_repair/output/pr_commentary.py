@@ -41,9 +41,7 @@ class _CommentConnector(Protocol):
         self, repo_owner: str, repo_name: str, comment_id: int, body: str
     ) -> dict[str, object]: ...
 
-    def delete_issue_comment(
-        self, repo_owner: str, repo_name: str, comment_id: int
-    ) -> None: ...
+    def delete_issue_comment(self, repo_owner: str, repo_name: str, comment_id: int) -> None: ...
 
 
 def build_pr_comment(
@@ -75,7 +73,9 @@ def build_pr_comment(
     else:
         lines.append("| _no findings_ | — | — | — |")
 
-    detail_blocks = [block for finding in findings for block in [_build_violation_block(finding)] if block]
+    detail_blocks = [
+        block for finding in findings for block in [_build_violation_block(finding)] if block
+    ]
     if detail_blocks:
         lines.extend(["", "### Contract violations", ""])
         lines.extend(detail_blocks)
@@ -98,7 +98,11 @@ def upsert_implementer_comment(
     for comment in existing:
         body_value = comment.get("body")
         id_value = comment.get("id")
-        if isinstance(body_value, str) and body_value.startswith(MARKER) and isinstance(id_value, int):
+        if (
+            isinstance(body_value, str)
+            and body_value.startswith(MARKER)
+            and isinstance(id_value, int)
+        ):
             marker_ids.append(id_value)
     if not marker_ids:
         return connector.post_pr_comment(pr.repo_owner, pr.repo_name, pr.pr_number, body)
@@ -111,9 +115,7 @@ def upsert_implementer_comment(
     return connector.update_issue_comment(pr.repo_owner, pr.repo_name, primary_id, body)
 
 
-def _table_row(
-    finding: Finding, execution: RepairExecution, proposal: ProposedPatch | None
-) -> str:
+def _table_row(finding: Finding, execution: RepairExecution, proposal: ProposedPatch | None) -> str:
     name = f"`{finding.finding_id}` {finding.category}"
     source = _source_label(finding)
     patch = _patch_status(finding, execution, proposal)
@@ -162,7 +164,11 @@ def _build_violation_block(finding: Finding) -> str | None:
     line = finding.line_start if finding.line_start is not None else "unknown"
     path = finding.file_path or "<repo-wide>"
     required = finding.suggested_fix or "manual review required"
-    evidence = ", ".join(finding.repo_rule_sources) if finding.repo_rule_sources else "repo governance context"
+    evidence = (
+        ", ".join(finding.repo_rule_sources)
+        if finding.repo_rule_sources
+        else "repo governance context"
+    )
     return (
         f"CONTRACT {contract_id} VIOLATION — {finding.category}\n"
         f"File: {path} Line: {line}\n"
