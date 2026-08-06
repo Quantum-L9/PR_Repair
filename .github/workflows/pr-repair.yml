@@ -80,7 +80,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           python-version: "3.11"
 
@@ -92,6 +92,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          # Per-tool enable gate (evidence-based). Copilot's review-thread channel
+          # is confirmed; CodeRabbit/Sonar/GitGuardian stay off until a repo
+          # confirms their live shape and flips the matching variable. A detected
+          # but not-enabled tool skips cleanly (exit 3). See docs/actuation/review_ingest.md.
+          PR_FIX_TOOL_COPILOT: ${{ vars.PR_REPAIR_TOOL_COPILOT || '1' }}
+          PR_FIX_TOOL_CODERABBIT: ${{ vars.PR_REPAIR_TOOL_CODERABBIT || '0' }}
+          PR_FIX_TOOL_SONARCLOUD: ${{ vars.PR_REPAIR_TOOL_SONARCLOUD || '0' }}
+          PR_FIX_TOOL_GITGUARDIAN: ${{ vars.PR_REPAIR_TOOL_GITGUARDIAN || '0' }}
         run: |
           # $GITHUB_EVENT_PATH is set automatically by Actions and points at the
           # pull_request_review event JSON. The entrypoint fetches the tool's

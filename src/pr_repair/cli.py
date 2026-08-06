@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--event-name",
         default=os.getenv("GITHUB_EVENT_NAME", "pull_request_review"),
     )
+    ingest_parser.add_argument("--enabled-tools", default=None)
     return parser
 
 
@@ -64,11 +65,17 @@ def main() -> int:
     # rest of the pipeline consumes, so it must not require the bot's full runtime
     # config (GITHUB_REPOSITORY etc.). Handle it before load_config().
     if args.command == "ingest-review":
+        enabled_tools = (
+            {tool.strip() for tool in args.enabled_tools.split(",") if tool.strip()}
+            if args.enabled_tools is not None
+            else None
+        )
         return review_ingest.run(
             output=args.output,
             context=args.context,
             event_path=args.event_path,
             event_name=args.event_name,
+            enabled_tools=enabled_tools,
         )
 
     config = load_config()
