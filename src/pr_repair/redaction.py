@@ -28,7 +28,9 @@ _PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+"), "Bearer " + _REDACTED),
     # key: value / KEY=value where the key name looks sensitive
     (
-        re.compile(r"(?i)\b([A-Za-z0-9_]*(?:token|api[_-]?key|secret|password|passwd|credential)[A-Za-z0-9_]*)\b(\s*[:=]\s*)\S+"),
+        re.compile(
+            r"(?i)\b([A-Za-z0-9_]*(?:token|api[_-]?key|secret|password|passwd|credential)[A-Za-z0-9_]*)\b(\s*[:=]\s*)\S+"
+        ),
         r"\1\2" + _REDACTED,
     ),
     # well-known token prefixes (GitHub, OpenAI/OpenRouter, Slack, AWS, Google)

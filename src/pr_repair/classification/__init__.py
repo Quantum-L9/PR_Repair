@@ -23,11 +23,11 @@ from pr_repair.classification.taxonomy import (
 )
 
 __all__ = [
+    "APPROVAL_REQUIRED_CATEGORIES",
+    "AUTO_REPAIRABLE_CATEGORIES",
+    "CATEGORY_TO_CONTRACT_IDS",
+    "FINDING_CATEGORIES",
+    "NEVER_AUTO_REPAIR_CATEGORIES",
     "classify_finding",
     "classify_findings",
-    "FINDING_CATEGORIES",
-    "AUTO_REPAIRABLE_CATEGORIES",
-    "APPROVAL_REQUIRED_CATEGORIES",
-    "NEVER_AUTO_REPAIR_CATEGORIES",
-    "CATEGORY_TO_CONTRACT_IDS",
 ]

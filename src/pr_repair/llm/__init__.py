@@ -16,11 +16,11 @@ from pr_repair.llm.contract import LLMRequest, LLMResult, ProposedPatch
 
 __all__ = [
     "LLMClient",
-    "NullLLMClient",
-    "RouterClient",
     "LLMRequest",
     "LLMResult",
+    "NullLLMClient",
     "ProposedPatch",
+    "RouterClient",
     "build_llm_client",
 ]
 

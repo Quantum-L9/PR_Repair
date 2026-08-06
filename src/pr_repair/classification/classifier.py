@@ -116,7 +116,6 @@ def _build_reason(
     )
 
 
-
 def requires_approval_for_category(category: str) -> bool:
     return category in APPROVAL_REQUIRED_CATEGORIES
 

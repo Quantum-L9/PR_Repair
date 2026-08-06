@@ -121,7 +121,7 @@ class Finding(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_line_range(self) -> "Finding":
+    def validate_line_range(self) -> Finding:
         if self.line_start is not None and self.line_start < 1:
             msg = "line_start must be >= 1"
             raise ValueError(msg)
@@ -246,6 +246,7 @@ class InterpretationReport(BaseModel):
     repairable_count: int
     escalation_required_count: int
     normalization_error_count: int
+
 
 class FindingCluster(BaseModel):
     cluster_id: str

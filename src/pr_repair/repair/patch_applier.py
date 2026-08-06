@@ -66,9 +66,9 @@ def _apply_replace_line(instruction: dict[str, object], root: Path) -> str:
     if not isinstance(line_number, int) or line_number < 1:
         raise ValueError("instruction missing valid line_number")
     if not isinstance(expected, str):
-        raise ValueError("instruction missing expected content")
+        raise TypeError("instruction missing expected content")
     if not isinstance(replacement, str):
-        raise ValueError("instruction missing replacement content")
+        raise TypeError("instruction missing replacement content")
 
     path = _resolve_within_root(root, file_path)
     lines = _read_lines(path, file_path)
@@ -101,7 +101,7 @@ def _apply_replace_range(instruction: dict[str, object], root: Path) -> str:
     if not isinstance(line_end, int) or line_end < line_start:
         raise ValueError("instruction missing valid line_end")
     if not isinstance(replacement, str):
-        raise ValueError("instruction missing replacement content")
+        raise TypeError("instruction missing replacement content")
 
     path = _resolve_within_root(root, file_path)
     lines = _read_lines(path, file_path)

@@ -63,9 +63,7 @@ def is_apply_eligible(finding: Finding, proposal: ProposedPatch, write_ceiling: 
         return False
     if is_never_auto_repair(finding.category):
         return False
-    if not is_within_write_ceiling(finding.tier_impact, write_ceiling):
-        return False
-    return True
+    return is_within_write_ceiling(finding.tier_impact, write_ceiling)
 
 
 def apply_llm_proposals(
@@ -93,7 +91,12 @@ def apply_llm_proposals(
     try:
         while True:
             modified = apply_patch_instructions(instructions, repo_root)
-            log_event("llm_patch_applied", pr_number=pr_ref.pr_number, attempt=attempt, modified_files=modified)
+            log_event(
+                "llm_patch_applied",
+                pr_number=pr_ref.pr_number,
+                attempt=attempt,
+                modified_files=modified,
+            )
             verification = run_verification(config.verify_command, repo_root)
             log_event(
                 "llm_verification_complete",
@@ -121,7 +124,13 @@ def apply_llm_proposals(
 
             if attempt >= MAX_RETRIES or regenerate is None:
                 return _execution(
-                    pr_ref, config, "rolled_back_verification_failed", [], verification, attempt, None
+                    pr_ref,
+                    config,
+                    "rolled_back_verification_failed",
+                    [],
+                    verification,
+                    attempt,
+                    None,
                 )
 
             attempt += 1
@@ -135,16 +144,17 @@ def apply_llm_proposals(
         # missing file, ...) must not leave the tree dirty -- roll back like the
         # deterministic lane, then surface the error.
         restore_worktree(snapshot, repo_root)
-        log_event("llm_repair_rolled_back", pr_number=pr_ref.pr_number, attempt=attempt, reason="exception")
+        log_event(
+            "llm_repair_rolled_back",
+            pr_number=pr_ref.pr_number,
+            attempt=attempt,
+            reason="exception",
+        )
         raise
 
 
 def _instructions(applicable: list[Proposal]) -> list[dict[str, object]]:
-    return [
-        proposal.instruction
-        for _, proposal in applicable
-        if proposal.instruction is not None
-    ]
+    return [proposal.instruction for _, proposal in applicable if proposal.instruction is not None]
 
 
 def _execution(

@@ -31,12 +31,16 @@ def build_repair_plan(pr: PRRef, findings: list[Finding], config: AppConfig) -> 
     - require approval for non-low-risk or approval-gated categories
     """
     targetable_findings = [finding for finding in findings if finding.repairable]
-    target_files = sorted({finding.file_path for finding in targetable_findings if finding.file_path})
+    target_files = sorted(
+        {finding.file_path for finding in targetable_findings if finding.file_path}
+    )
     protected_paths_touched = any(finding.protected_path for finding in findings)
     target_tier = _max_tier(targetable_findings)
     verification_command = resolve_verify_command(config)
     risk_level = _risk_level(findings, protected_paths_touched, target_tier)
-    approval_required = _approval_required(findings, protected_paths_touched, risk_level, target_tier)
+    approval_required = _approval_required(
+        findings, protected_paths_touched, risk_level, target_tier
+    )
     executable = _is_executable(
         targetable_findings=targetable_findings,
         protected_paths_touched=protected_paths_touched,
@@ -121,9 +125,7 @@ def _is_executable(
         return False
     if not is_within_write_ceiling(target_tier, config.write_ceiling):
         return False
-    if any(is_never_auto_repair(item.category) for item in targetable_findings):
-        return False
-    return True
+    return not any(is_never_auto_repair(item.category) for item in targetable_findings)
 
 
 def _build_rationale(

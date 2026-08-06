@@ -50,7 +50,9 @@ def generate_patch_instructions(
     return instructions
 
 
-def _build_autofix_instruction(finding: Finding, lines: list[str] | None) -> dict[str, object] | None:
+def _build_autofix_instruction(
+    finding: Finding, lines: list[str] | None
+) -> dict[str, object] | None:
     assert finding.line_start is not None  # guarded by caller
     # A deterministic autofix must carry an exact on-disk guard. If the file was not
     # readable at generation time we cannot capture one, so we skip the patch rather

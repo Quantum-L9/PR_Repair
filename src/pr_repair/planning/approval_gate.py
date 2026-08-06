@@ -37,6 +37,4 @@ def requires_human_approval(plan: RepairPlan, config: AppConfig) -> bool:
         return True
     if plan.risk_level == "high":
         return True
-    if config.allow_push and plan.target_tier not in {TierLevel.t1, TierLevel.t2}:
-        return True
-    return False
+    return bool(config.allow_push and plan.target_tier not in {TierLevel.t1, TierLevel.t2})

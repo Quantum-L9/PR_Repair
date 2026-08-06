@@ -16,7 +16,6 @@ import json
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-
 SUPPORTED_ACTIONS: dict[str, set[str]] = {
     "pull_request": {"opened", "synchronize"},
     "pull_request_review": {"submitted"},
@@ -41,7 +40,11 @@ class NormalizedPREvent:
 
     @property
     def supported(self) -> bool:
-        return self.trigger != "ignored" and self.repo_full_name is not None and self.pr_number is not None
+        return (
+            self.trigger != "ignored"
+            and self.repo_full_name is not None
+            and self.pr_number is not None
+        )
 
 
 # Substring -> canonical tool name, matched against review author logins and
@@ -109,7 +112,7 @@ def parse_github_webhook(
     event_name = _header(headers, "X-GitHub-Event") or ""
     payload = json.loads(raw_body.decode("utf-8"))
     if not isinstance(payload, dict):
-        raise ValueError("GitHub webhook payload must be a JSON object")
+        raise TypeError("GitHub webhook payload must be a JSON object")
     action = str(payload.get("action", ""))
     if action not in SUPPORTED_ACTIONS.get(event_name, set()):
         return NormalizedPREvent(event_name, action, "ignored", None, None, None, payload)
@@ -151,19 +154,25 @@ def _pr_ref(event_name: str, payload: dict[str, Any]) -> tuple[int | None, str |
         head_raw = pr.get("head")
         head: dict[str, Any] = head_raw if isinstance(head_raw, dict) else {}
         number = pr.get("number")
-        return int(number) if isinstance(number, int) else None, str(head.get("sha")) if head.get("sha") else None
+        return int(number) if isinstance(number, int) else None, str(head.get("sha")) if head.get(
+            "sha"
+        ) else None
     prs = payload.get("pull_requests")
     if isinstance(prs, list) and prs and isinstance(prs[0], dict):
         pr = prs[0]
         number = pr.get("number")
         head_raw = pr.get("head")
         head = head_raw if isinstance(head_raw, dict) else {}
-        return int(number) if isinstance(number, int) else None, str(head.get("sha")) if head.get("sha") else None
+        return int(number) if isinstance(number, int) else None, str(head.get("sha")) if head.get(
+            "sha"
+        ) else None
     workflow = payload.get("workflow_run")
     if isinstance(workflow, dict):
         prs = workflow.get("pull_requests")
         if isinstance(prs, list) and prs and isinstance(prs[0], dict):
             number = prs[0].get("number")
             head_sha = workflow.get("head_sha")
-            return int(number) if isinstance(number, int) else None, str(head_sha) if head_sha else None
+            return int(number) if isinstance(number, int) else None, str(
+                head_sha
+            ) if head_sha else None
     return None, None

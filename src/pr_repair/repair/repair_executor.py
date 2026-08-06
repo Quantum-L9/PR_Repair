@@ -76,7 +76,9 @@ def execute_repair_plan(
         )
         if not verification_result.success:
             rollback_to_backup(backup_ref, root)
-            log_event("repair_rolled_back", pr_number=plan.pr_ref.pr_number, reason="verification_failed")
+            log_event(
+                "repair_rolled_back", pr_number=plan.pr_ref.pr_number, reason="verification_failed"
+            )
             # Deterministic autofixes must never break verification. If they do,
             # the Semgrep rule is a false-positive candidate: flag it for the CI
             # platform and fail immediately -- no LLM, no retry.

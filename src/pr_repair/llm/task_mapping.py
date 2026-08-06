@@ -62,7 +62,7 @@ def build_request(
     repo_root: Path,
     client_id: str,
     feedback: str | None = None,
-    resolved: "ResolvedLLMConfig | None" = None,
+    resolved: ResolvedLLMConfig | None = None,
 ) -> LLMRequest:
     """Build a bounded code-repair request for a single manual-review finding.
 

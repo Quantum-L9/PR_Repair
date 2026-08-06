@@ -94,7 +94,9 @@ class PRLoopOrchestrator:
         state_store: PRStateStore,
         finding_provider: FindingProvider,
         signal_provider: SignalProvider | None = None,
-        repair_executor: Callable[[RepairPlan, AppConfig, Path | None], RepairExecution] = execute_repair_plan,
+        repair_executor: Callable[
+            [RepairPlan, AppConfig, Path | None], RepairExecution
+        ] = execute_repair_plan,
         loop_config: PRLoopConfig | None = None,
         repo_root: Path | None = None,
     ) -> None:
@@ -130,12 +132,16 @@ class PRLoopOrchestrator:
             return PRLoopResult(PRLoopState.waiting_for_signals, state)
         return self._attempt_repair(pr_ref, state)
 
-    def on_signals_completed(self, pr_ref: PRRef, *, head_repo_full_name: str | None = None) -> PRLoopResult:
+    def on_signals_completed(
+        self, pr_ref: PRRef, *, head_repo_full_name: str | None = None
+    ) -> PRLoopResult:
         return self.on_pr_event(pr_ref, head_repo_full_name=head_repo_full_name)
 
     def _attempt_repair(self, pr_ref: PRRef, state: PRRepairState) -> PRLoopResult:
         if state.attempt >= self.loop_config.max_repair_attempts:
-            return self._block(state, TerminalBlocker.max_attempts_reached, PRLoopState.max_attempts_reached)
+            return self._block(
+                state, TerminalBlocker.max_attempts_reached, PRLoopState.max_attempts_reached
+            )
         findings = self.finding_provider(pr_ref)
         if not findings:
             state.mark_terminal("clean")
@@ -149,7 +155,9 @@ class PRLoopOrchestrator:
         if requires_human_approval(plan, self.app_config):
             state.mark_terminal(TerminalBlocker.approval_gate_denied.value)
             self.state_store.save(state)
-            return PRLoopResult(PRLoopState.approval_required, state, plan=plan, reason="approval_required")
+            return PRLoopResult(
+                PRLoopState.approval_required, state, plan=plan, reason="approval_required"
+            )
         if not plan.executable:
             return self._block(state, "plan_not_executable")
         state.attempt += 1
@@ -158,15 +166,25 @@ class PRLoopOrchestrator:
         if execution.status == "completed":
             state.last_repair_commit = execution.push_result
             self.state_store.save(state)
-            return PRLoopResult(PRLoopState.waiting_for_ci_rerun, state, plan=plan, execution=execution)
+            return PRLoopResult(
+                PRLoopState.waiting_for_ci_rerun, state, plan=plan, execution=execution
+            )
         if execution.status == "approval_required":
             state.mark_terminal(TerminalBlocker.approval_gate_denied.value)
             self.state_store.save(state)
-            return PRLoopResult(PRLoopState.approval_required, state, plan=plan, execution=execution)
+            return PRLoopResult(
+                PRLoopState.approval_required, state, plan=plan, execution=execution
+            )
         if state.attempt >= self.loop_config.max_repair_attempts:
-            return self._block(state, TerminalBlocker.failed_tests_after_max_attempts, PRLoopState.max_attempts_reached)
+            return self._block(
+                state,
+                TerminalBlocker.failed_tests_after_max_attempts,
+                PRLoopState.max_attempts_reached,
+            )
         self.state_store.save(state)
-        return PRLoopResult(PRLoopState.blocked, state, plan=plan, execution=execution, reason=execution.status)
+        return PRLoopResult(
+            PRLoopState.blocked, state, plan=plan, execution=execution, reason=execution.status
+        )
 
     def _block(
         self,
@@ -179,7 +197,10 @@ class PRLoopOrchestrator:
         return PRLoopResult(loop_state, state, reason=state.terminal_reason)
 
     def _is_fork_pr(self, pr_ref: PRRef, head_repo_full_name: str | None) -> bool:
-        return self.loop_config.same_repo_branches_only and head_repo_full_name not in {None, pr_ref.repo_full_name}
+        return self.loop_config.same_repo_branches_only and head_repo_full_name not in {
+            None,
+            pr_ref.repo_full_name,
+        }
 
     def _is_protected_branch_direct_mutation(self, pr_ref: PRRef) -> bool:
         return pr_ref.head_branch == pr_ref.base_branch

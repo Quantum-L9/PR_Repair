@@ -49,10 +49,7 @@ class NullLLMClient:
     """Default client: abstains on everything. No network, no keys, no cost."""
 
     def generate(self, requests: list[LLMRequest]) -> list[LLMResult]:
-        return [
-            LLMResult(finding_id=request.finding_id, abstained=True)
-            for request in requests
-        ]
+        return [LLMResult(finding_id=request.finding_id, abstained=True) for request in requests]
 
 
 class RouterClient:
@@ -85,9 +82,7 @@ class RouterClient:
         )
         return results
 
-    def _subprocess_transport(
-        self, payload: list[dict[str, object]]
-    ) -> list[dict[str, object]]:
+    def _subprocess_transport(self, payload: list[dict[str, object]]) -> list[dict[str, object]]:
         if not self._shim_path.exists():
             msg = f"router shim not found at {self._shim_path}"
             raise LLMUnavailableError(msg)

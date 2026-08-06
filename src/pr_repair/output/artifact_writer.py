@@ -50,9 +50,13 @@ def write_pr_artifacts(
         normalized_count=len(bundle.merged_findings),
         deduped_count=len(deduped_findings),
         protected_path_findings=sum(1 for finding in classified_findings if finding.protected_path),
-        contract_violation_findings=sum(1 for finding in classified_findings if finding.contract_ids),
+        contract_violation_findings=sum(
+            1 for finding in classified_findings if finding.contract_ids
+        ),
         repairable_count=sum(1 for finding in classified_findings if finding.repairable),
-        escalation_required_count=sum(1 for finding in classified_findings if finding.protected_path),
+        escalation_required_count=sum(
+            1 for finding in classified_findings if finding.protected_path
+        ),
         normalization_error_count=len(bundle.normalization_errors),
     )
 
@@ -117,9 +121,14 @@ def write_run_artifacts(
         result_sections = []
         for execution in executions:
             if execution.verification_result is not None:
-                verification_sections.append(build_verification_markdown(execution.verification_result))
+                verification_sections.append(
+                    build_verification_markdown(execution.verification_result)
+                )
             result_sections.append(build_pr_result_markdown(execution))
-        store.write_markdown("verification_report.md", "\n\n".join(verification_sections) or "# Verification report\n")
+        store.write_markdown(
+            "verification_report.md",
+            "\n\n".join(verification_sections) or "# Verification report\n",
+        )
         store.write_markdown("pr_result_report.md", "\n\n".join(result_sections))
     store.write_markdown("phase_summary.md", _build_phase_summary(reports, plans, executions))
 
@@ -196,8 +205,8 @@ def write_interpretation_artifacts(
 ) -> InterpretationReport:
     """Compatibility wrapper for phase-3 artifact tests and callers."""
     from pr_repair.config import AppConfig
-    from pr_repair.types import ExecutionMode, TierLevel
     from pr_repair.planning.repair_planner import build_repair_plan
+    from pr_repair.types import ExecutionMode, TierLevel
 
     config = AppConfig(
         github_token="compat-token",

@@ -44,7 +44,9 @@ class RuntimeManager:
         completed = list(run_state.completed_phases)
         if run_state.current_phase not in completed:
             completed.append(run_state.current_phase)
-        updated = run_state.model_copy(update={"completed_phases": completed, "status": "completed"})
+        updated = run_state.model_copy(
+            update={"completed_phases": completed, "status": "completed"}
+        )
         self._store.write_runtime_state(updated)
         return updated
 

@@ -81,28 +81,55 @@ _TOOL_ENV: dict[str, tuple[str, str]] = {
 
 def enabled_tools_from_env() -> set[str]:
     """Resolve the enabled tool set from PR_FIX_TOOL_* env (config parity)."""
-    return {
-        name
-        for name, (var, default) in _TOOL_ENV.items()
-        if os.getenv(var, default) == "1"
-    }
+    return {name for name, (var, default) in _TOOL_ENV.items() if os.getenv(var, default) == "1"}
+
 
 # Schema-allowed keys, mirroring contracts/agent-review-payload.schema.json
 # (``additionalProperties: false`` there means we must project, not pass through).
 _PR_REQUIRED = (
-    "repo_owner", "repo_name", "pr_number", "title",
-    "head_branch", "base_branch", "head_sha", "author",
+    "repo_owner",
+    "repo_name",
+    "pr_number",
+    "title",
+    "head_branch",
+    "base_branch",
+    "head_sha",
+    "author",
 )
 _PR_KEYS = (*_PR_REQUIRED, "is_draft", "labels", "changed_files")
 _AUTOFIX_KEYS = (
-    "finding_id", "category", "severity", "message", "file_path",
-    "line_start", "line_end", "replacement_text", "rule_id", "evidence_url",
-    "confidence", "tags", "tool", "thread_id", "comment_id",
+    "finding_id",
+    "category",
+    "severity",
+    "message",
+    "file_path",
+    "line_start",
+    "line_end",
+    "replacement_text",
+    "rule_id",
+    "evidence_url",
+    "confidence",
+    "tags",
+    "tool",
+    "thread_id",
+    "comment_id",
 )
 _MANUAL_KEYS = (
-    "finding_id", "category", "severity", "message", "file_path",
-    "line_start", "line_end", "suggested_fix", "rule_id", "evidence_url",
-    "confidence", "tags", "tool", "thread_id", "comment_id",
+    "finding_id",
+    "category",
+    "severity",
+    "message",
+    "file_path",
+    "line_start",
+    "line_end",
+    "suggested_fix",
+    "rule_id",
+    "evidence_url",
+    "confidence",
+    "tags",
+    "tool",
+    "thread_id",
+    "comment_id",
 )
 
 
@@ -148,9 +175,7 @@ def _safe_path(path: str) -> Path:
         if resolved == root or root in resolved.parents:
             return resolved
     allowed = ", ".join(str(r) for r in roots)
-    raise ReviewIngestError(
-        f"refusing path outside allowed roots ({allowed}): {path}"
-    )
+    raise ReviewIngestError(f"refusing path outside allowed roots ({allowed}): {path}")
 
 
 class ReviewSkipped(Exception):
@@ -310,8 +335,7 @@ def _changed_files_best_effort(
         return load_changed_filenames(connector, repo_owner, repo_name, pr_number)
     except requests.RequestException as exc:
         print(
-            f"[ingest-review] notice: could not fetch changed files ({exc}); "
-            "proceeding with none",
+            f"[ingest-review] notice: could not fetch changed files ({exc}); proceeding with none",
             file=sys.stderr,
         )
         return []
@@ -326,7 +350,8 @@ def _pr_block_from_event(event: dict[str, Any], pr: dict[str, Any]) -> dict[str,
         if isinstance(label, dict) and label.get("name")
     ]
     block: dict[str, Any] = {
-        "repo_owner": _nested(repo, "owner", "login") or _nested(pr, "base", "repo", "owner", "login"),
+        "repo_owner": _nested(repo, "owner", "login")
+        or _nested(pr, "base", "repo", "owner", "login"),
         "repo_name": repo.get("name") if isinstance(repo, dict) else None,
         "pr_number": pr.get("number"),
         "title": pr.get("title"),
@@ -368,7 +393,9 @@ def _validate_payload(payload: dict[str, Any]) -> None:
     if errors:
         first = errors[0]
         location = "/".join(str(part) for part in first.absolute_path) or "<root>"
-        raise ReviewIngestError(f"payload failed schema validation at '{location}': {first.message}")
+        raise ReviewIngestError(
+            f"payload failed schema validation at '{location}': {first.message}"
+        )
 
 
 def _load_json(path: str) -> Any:
@@ -421,11 +448,16 @@ def run(
             event = _load_json_dict(event_path)
             token = os.getenv("GITHUB_TOKEN")
             if not token:
-                raise ReviewIngestError("GITHUB_TOKEN is required for live (--event-path) ingestion")
+                raise ReviewIngestError(
+                    "GITHUB_TOKEN is required for live (--event-path) ingestion"
+                )
             connector = connector_factory(token)
             enabled = enabled_tools if enabled_tools is not None else enabled_tools_from_env()
             payload = collect_payload(
-                event, connector, event_name=event_name, enabled=enabled,
+                event,
+                connector,
+                event_name=event_name,
+                enabled=enabled,
                 generated_at=generated_at,
             )
         else:
@@ -462,7 +494,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Normalize a PR review into agent_review_payload.json.",
     )
     parser.add_argument("--output", required=True, help="Path to write agent_review_payload.json.")
-    parser.add_argument("--context", default=None, help="Captured review-context JSON (offline mode).")
+    parser.add_argument(
+        "--context", default=None, help="Captured review-context JSON (offline mode)."
+    )
     parser.add_argument("--event-path", default=None, help="GitHub Actions event JSON (live mode).")
     parser.add_argument(
         "--event-name",
