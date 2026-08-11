@@ -5,6 +5,6 @@
 mypy>=1.11
 types-requests
 types-PyYAML
-ruff>=0.6
+ruff>=0.16.2
 pytest>=8
 pytest-cov
