@@ -2,9 +2,9 @@
 # Editable install pulls runtime deps (pydantic ships PEP 561 types) so mypy
 # strict does not treat BaseModel as Any under --ignore-missing-imports.
 -e .
-mypy>=1.11
+mypy>=2.3.1
 types-requests
 types-PyYAML
-ruff>=0.6
+ruff>=0.16.3
 pytest>=8
 pytest-cov
