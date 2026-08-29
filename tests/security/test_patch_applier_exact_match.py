@@ -40,7 +40,8 @@ def test_replace_line_applies_on_exact_match(tmp_path: Path) -> None:
         tmp_path,
     )
 
-    assert modified == ["script.py"]
+    assert modified.modified_files == ["script.py"]
+    assert modified.applied_finding_ids == []
     assert path.read_text(encoding="utf-8") == "a\nTransportPacket\nc\n"
 
 
@@ -62,7 +63,7 @@ def test_replace_range_applies_with_matching_block(tmp_path: Path) -> None:
         tmp_path,
     )
 
-    assert modified == ["mod.py"]
+    assert modified.modified_files == ["mod.py"]
     assert path.read_text(encoding="utf-8") == "h\nnew1\nnew2\nnew3\nt\n"
 
 
@@ -113,7 +114,7 @@ def test_valid_repo_relative_path_is_patched(tmp_path: Path) -> None:
         tmp_path,
     )
 
-    assert modified == ["pkg/mod.py"]
+    assert modified.modified_files == ["pkg/mod.py"]
     assert nested.read_text(encoding="utf-8") == "a\nnew\nc\n"
 
 
@@ -162,3 +163,25 @@ def test_absolute_outside_root_path_is_rejected(tmp_path: Path) -> None:
             root,
         )
     assert outside.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_applier_returns_finding_ids_not_just_paths(tmp_path: Path) -> None:
+    path = tmp_path / "shared.py"
+    path.write_text("a\nold\nc\n", encoding="utf-8")
+
+    result = apply_patch_instructions(
+        [
+            {
+                "op": "replace_line",
+                "file_path": "shared.py",
+                "line_number": 2,
+                "expected": "old",
+                "replacement": "new",
+                "finding_id": "f-a",
+            }
+        ],
+        tmp_path,
+    )
+
+    assert result.modified_files == ["shared.py"]
+    assert result.applied_finding_ids == ["f-a"]

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 
 def _resolve_within_root(root: Path, file_path: str) -> Path:
@@ -32,15 +33,32 @@ def _resolve_within_root(root: Path, file_path: str) -> Path:
     return target
 
 
+class PatchApplyResult(NamedTuple):
+    modified_files: list[str]
+    applied_finding_ids: list[str]
+
+
+def _instruction_finding_id(instruction: dict[str, object]) -> str | None:
+    finding_id = instruction.get("finding_id")
+    if isinstance(finding_id, str) and finding_id:
+        return finding_id
+    return None
+
+
 def apply_patch_instructions(
     instructions: list[dict[str, object]],
     repo_root: Path | None = None,
-) -> list[str]:
-    """
-    Apply supported patch instructions and return modified file paths.
+) -> PatchApplyResult:
+    """Apply supported patch instructions.
+
+    Returns modified repo-relative paths **and** the finding ids that
+    actually applied. Callers must not infer applied findings from
+    ``modified_files`` (two findings can share a path).
     """
     root = repo_root or Path.cwd()
     modified: list[str] = []
+    applied_ids: list[str] = []
+    seen_ids: set[str] = set()
 
     for instruction in instructions:
         op = instruction.get("op")
@@ -52,8 +70,12 @@ def apply_patch_instructions(
             msg = f"unsupported patch op: {op}"
             raise ValueError(msg)
         modified.append(file_path)
+        finding_id = _instruction_finding_id(instruction)
+        if finding_id is not None and finding_id not in seen_ids:
+            seen_ids.add(finding_id)
+            applied_ids.append(finding_id)
 
-    return sorted(set(modified))
+    return PatchApplyResult(modified_files=sorted(set(modified)), applied_finding_ids=applied_ids)
 
 
 def _apply_replace_line(instruction: dict[str, object], root: Path) -> str:

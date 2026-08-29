@@ -66,7 +66,9 @@ def test_copilot_suggestion_is_fixed_replied_and_resolved(monkeypatch, tmp_path:
         return RepairExecution(
             execution_id="e", pr_ref=plan.pr_ref, plan_id=plan.plan_id,
             mode=plan.execution_mode, status="completed",
-            modified_files=["engine.py"], push_result="pushed:abc123",
+            modified_files=["engine.py"],
+            applied_finding_ids=[finding.finding_id for finding in plan.targeted_findings],
+            push_result="pushed:abc123",
         )
 
     monkeypatch.setattr(tool_dispatcher, "execute_repair_plan", fake_execute)

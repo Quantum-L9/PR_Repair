@@ -77,6 +77,7 @@ def test_table_reflects_applied_autofix_and_passing_verification() -> None:
         execution_id="exec-7", pr_ref=_pr(7), plan_id="plan-7",
         mode=ExecutionMode.repair_and_verify, status="completed",
         modified_files=["engine/module.py"],
+        applied_finding_ids=["f-61"],
         verification_result=VerificationReport(
             command=["pytest"], success=True, exit_code=0, stdout="", stderr=""
         ),
@@ -89,6 +90,37 @@ def test_table_reflects_applied_autofix_and_passing_verification() -> None:
 
     assert "✅ applied" in comment
     assert "✅ passing" in comment
+
+
+def test_same_file_second_finding_is_not_marked_applied() -> None:
+    execution = RepairExecution(
+        execution_id="exec-7", pr_ref=_pr(7), plan_id="plan-7",
+        mode=ExecutionMode.repair_and_verify, status="completed",
+        modified_files=["engine/module.py"],
+        applied_finding_ids=["f-61"],
+        verification_result=VerificationReport(
+            command=["pytest"], success=True, exit_code=0, stdout="", stderr=""
+        ),
+    )
+    applied = _finding(
+        pr_number=7, category="lint_failure", contract_ids=[],
+        review_disposition=ReviewDisposition.autofix,
+    )
+    other = _finding(
+        finding_id="f-62",
+        pr_number=7,
+        category="lint_failure",
+        contract_ids=[],
+        fingerprint="fp-62",
+        review_disposition=ReviewDisposition.autofix,
+    )
+    comment = build_pr_comment(execution, [applied, other])
+
+    assert "`f-61`" in comment
+    assert "`f-62`" in comment
+    rows = [line for line in comment.splitlines() if line.startswith("| `")]
+    assert any("✅ applied" in row and "`f-61`" in row for row in rows)
+    assert any("—" in row and "`f-62`" in row for row in rows)
 
 
 def test_table_reflects_manual_proposal() -> None:

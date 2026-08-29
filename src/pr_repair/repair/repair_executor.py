@@ -60,12 +60,15 @@ def execute_repair_plan(
                 status="no_applicable_instructions",
             )
 
-        modified_files = apply_patch_instructions(instructions, root)
+        applied = apply_patch_instructions(instructions, root)
+        modified_files = applied.modified_files
+        applied_finding_ids = applied.applied_finding_ids
         log_event(
             "patch_applied",
             pr_number=plan.pr_ref.pr_number,
             instructions=len(instructions),
             modified_files=modified_files,
+            applied_finding_ids=applied_finding_ids,
         )
         verification_result = run_verification(plan.verification_command, root)
         log_event(
@@ -116,6 +119,7 @@ def execute_repair_plan(
             plan_id=plan.plan_id,
             mode=plan.execution_mode,
             modified_files=modified_files,
+            applied_finding_ids=applied_finding_ids,
             verification_result=verification_result,
             push_result=push_result,
             status="completed",

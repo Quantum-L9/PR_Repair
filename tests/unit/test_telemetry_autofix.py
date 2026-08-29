@@ -38,16 +38,26 @@ def _autofix(rule_id: str | None, file_path: str = "a.py", pr: int = 1) -> Findi
     )
 
 
-def _execution(status: str, *, modified=None, false_positive=None, pr: int = 1) -> RepairExecution:
+def _execution(
+    status: str,
+    *,
+    modified=None,
+    applied=None,
+    false_positive=None,
+    pr: int = 1,
+) -> RepairExecution:
     return RepairExecution(
         execution_id="e", pr_ref=_pr(pr), plan_id="p", mode=ExecutionMode.repair_and_verify,
-        modified_files=modified or [], false_positive_rules=false_positive or [], status=status,
+        modified_files=modified or [],
+        applied_finding_ids=applied or [],
+        false_positive_rules=false_positive or [],
+        status=status,
     )
 
 
 def test_clean_autofix_is_promotable() -> None:
     findings = [_autofix("rule-a", "a.py")]
-    execs = [_execution("completed", modified=["a.py"])]
+    execs = [_execution("completed", modified=["a.py"], applied=["af-rule-a-a.py"])]
 
     tel = build_autofix_telemetry(findings, execs)
 
@@ -86,7 +96,7 @@ def test_findings_without_rule_id_are_skipped() -> None:
 
 def test_same_rule_aggregates_across_files() -> None:
     findings = [_autofix("rule-d", "a.py"), _autofix("rule-d", "b.py")]
-    execs = [_execution("completed", modified=["a.py"])]  # only a.py applied
+    execs = [_execution("completed", modified=["a.py"], applied=["af-rule-d-a.py"])]  # only a.py applied
 
     tel = build_autofix_telemetry(findings, execs)
 
