@@ -55,7 +55,9 @@ def build_autofix_telemetry(
         if rule_id in execution.false_positive_rules:
             stats.false_positive += 1
             stats.rolled_back += 1
-        elif execution.status == "completed" and finding.file_path in execution.modified_files:
+        elif (
+            execution.status == "completed" and finding.finding_id in execution.applied_finding_ids
+        ):
             stats.applied += 1
             stats.verified += 1
 

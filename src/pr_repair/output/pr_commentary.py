@@ -135,7 +135,7 @@ def _patch_status(
     finding: Finding, execution: RepairExecution, proposal: ProposedPatch | None
 ) -> str:
     if finding.review_disposition is ReviewDisposition.autofix:
-        if execution.status == "completed" and finding.file_path in execution.modified_files:
+        if execution.status == "completed" and finding.finding_id in execution.applied_finding_ids:
             return "✅ applied"
         if execution.status == "rolled_back_verification_failed":
             return "↩️ rolled back"

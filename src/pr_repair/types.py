@@ -186,6 +186,7 @@ class RepairExecution(BaseModel):
     plan_id: str
     mode: ExecutionMode
     modified_files: list[str] = Field(default_factory=list)
+    applied_finding_ids: list[str] = Field(default_factory=list)
     verification_result: VerificationReport | None = None
     push_result: str | None = None
     review_comment_payload: str | None = None

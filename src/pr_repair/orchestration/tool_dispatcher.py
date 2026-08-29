@@ -116,14 +116,14 @@ def run_tool_actuation(
         execution = (
             execute_repair_plan(plan, config, repo_root) if config.mode in _REPAIR_MODES else None
         )
-        applied = set(execution.modified_files) if execution is not None else set()
+        applied = set(execution.applied_finding_ids) if execution is not None else set()
         commit_sha = _commit_sha(execution.push_result) if execution is not None else None
         for finding in route.autofix:
             strategy = strategies[finding.finding_id]
             if (
                 execution is not None
                 and execution.status == "completed"
-                and finding.file_path in applied
+                and finding.finding_id in applied
             ):
                 result = responder.respond(pr_ref, finding, "fixed", commit_sha=commit_sha)
             else:

@@ -97,6 +97,7 @@ def test_apply_success(tmp_path: Path) -> None:
     assert result.status == "completed"
     assert result.retries_used == 0
     assert result.modified_files == ["f.py"]
+    assert result.applied_finding_ids == ["mr-1"]
     assert (repo / "f.py").read_text() == "GOOD\n"
 
 

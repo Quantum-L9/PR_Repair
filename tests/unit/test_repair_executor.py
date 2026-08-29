@@ -77,6 +77,7 @@ def test_execute_repair_plan_applies_and_verifies_without_push(tmp_path: Path) -
 
     assert execution.status == "completed"
     assert execution.modified_files == ["script.py"]
+    assert execution.applied_finding_ids == ["f-77"]
     assert execution.verification_result is not None
     assert execution.verification_result.success is True
     assert file_path.read_text(encoding="utf-8").splitlines()[1] == "good line"

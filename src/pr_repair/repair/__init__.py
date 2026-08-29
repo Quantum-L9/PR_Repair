@@ -8,11 +8,12 @@
 # status: active
 # --- /L9_META ---
 
-from pr_repair.repair.patch_applier import apply_patch_instructions
+from pr_repair.repair.patch_applier import PatchApplyResult, apply_patch_instructions
 from pr_repair.repair.patch_generator import generate_patch_instructions
 from pr_repair.repair.repair_executor import execute_repair_plan
 
 __all__ = [
+    "PatchApplyResult",
     "apply_patch_instructions",
     "execute_repair_plan",
     "generate_patch_instructions",

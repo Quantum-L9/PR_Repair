@@ -90,12 +90,15 @@ def apply_llm_proposals(
 
     try:
         while True:
-            modified = apply_patch_instructions(instructions, repo_root)
+            applied = apply_patch_instructions(instructions, repo_root)
+            modified = applied.modified_files
+            applied_finding_ids = applied.applied_finding_ids
             log_event(
                 "llm_patch_applied",
                 pr_number=pr_ref.pr_number,
                 attempt=attempt,
                 modified_files=modified,
+                applied_finding_ids=applied_finding_ids,
             )
             verification = run_verification(config.verify_command, repo_root)
             log_event(
@@ -116,7 +119,14 @@ def apply_llm_proposals(
                     push_changes(pr_ref.head_branch, repo_root)
                     push_result = f"pushed:{commit_sha}"
                 return _execution(
-                    pr_ref, config, "completed", modified, verification, attempt, push_result
+                    pr_ref,
+                    config,
+                    "completed",
+                    modified,
+                    applied_finding_ids,
+                    verification,
+                    attempt,
+                    push_result,
                 )
 
             restore_worktree(snapshot, repo_root)
@@ -128,6 +138,7 @@ def apply_llm_proposals(
                     config,
                     "rolled_back_verification_failed",
                     [],
+                    [],
                     verification,
                     attempt,
                     None,
@@ -137,7 +148,14 @@ def apply_llm_proposals(
             instructions = _instructions(regenerate(verification.stderr))
             if not instructions:
                 return _execution(
-                    pr_ref, config, "rolled_back_no_retry_patch", [], verification, attempt, None
+                    pr_ref,
+                    config,
+                    "rolled_back_no_retry_patch",
+                    [],
+                    [],
+                    verification,
+                    attempt,
+                    None,
                 )
     except Exception:
         # A raise from apply/verify/regenerate (unsupported op, exact-match mismatch,
@@ -162,6 +180,7 @@ def _execution(
     config: AppConfig,
     status: str,
     modified: list[str],
+    applied_finding_ids: list[str],
     verification: VerificationReport,
     retries: int,
     push_result: str | None,
@@ -172,6 +191,7 @@ def _execution(
         plan_id=f"llm-{pr_ref.pr_number}",
         mode=config.mode,
         modified_files=modified,
+        applied_finding_ids=applied_finding_ids,
         verification_result=verification,
         push_result=push_result,
         status=status,
