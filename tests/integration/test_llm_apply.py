@@ -196,8 +196,10 @@ def test_apply_refuses_a_proposal_with_no_expected_block(tmp_path: Path) -> None
                      "line_end": 1, "replacement": "PWNED", "finding_id": "mr-1"},
     )
 
+    pr, finding, config = _pr(), _finding(), _config(tmp_path, _CHECK_GOOD)
+
     with pytest.raises(ValueError, match="requires expected_block"):
-        apply_llm_proposals(_pr(), [(_finding(), unguarded)], _config(tmp_path, _CHECK_GOOD), repo)
+        apply_llm_proposals(pr, [(finding, unguarded)], config, repo)
     assert (repo / "f.py").read_text() == "OLD\n"
 
 
@@ -206,7 +208,9 @@ def test_apply_aborts_when_the_expected_block_is_stale(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     stale = _proposal("NEW", expected_block=["WHAT THE MODEL THOUGHT WAS HERE"])
 
+    pr, finding, config = _pr(), _finding(), _config(tmp_path, _CHECK_GOOD)
+
     with pytest.raises(ValueError, match="expected block mismatch"):
-        apply_llm_proposals(_pr(), [(_finding(), stale)], _config(tmp_path, _CHECK_GOOD), repo)
+        apply_llm_proposals(pr, [(finding, stale)], config, repo)
     assert (repo / "f.py").read_text() == "OLD\n"
 
