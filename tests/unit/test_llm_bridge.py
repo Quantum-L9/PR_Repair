@@ -121,7 +121,21 @@ def test_propose_repairs_skips_protected_paths(tmp_path: Path) -> None:
     assert fake.calls == []  # protected findings never reach the model
 
 
+def _write_target(root: Path, *lines: str, path: str = "engine/server.py") -> Path:
+    """Materialize the file a proposal targets.
+
+    The proposer reads the block it proposes to replace from disk, so a
+    proposal for a file that does not exist now abstains. Tests that expect an
+    actionable instruction must provide the source.
+    """
+    target = root / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return target
+
+
 def test_propose_repairs_parses_valid_patch(tmp_path: Path) -> None:
+    _write_target(tmp_path, "import os", "", "from fastapi import FastAPI")
     content = json.dumps(
         {"op": "replace_range", "line_start": 3, "line_end": 3, "replacement": "x = 1", "rationale": "fix"}
     )
@@ -133,6 +147,44 @@ def test_propose_repairs_parses_valid_patch(tmp_path: Path) -> None:
     assert p.instruction["file_path"] == "engine/server.py"
     assert p.instruction["source"] == "llm_router"
     assert p.model == "anthropic/claude-sonnet"
+
+
+def test_llm_proposal_binds_the_instruction_to_on_disk_content(tmp_path: Path) -> None:
+    """The model supplies line numbers; the block comes from the file itself.
+
+    Without this the applier had nothing to verify a model-chosen range
+    against, and a hallucinated or shifted span overwrote whatever occupied
+    those line numbers.
+    """
+    _write_target(tmp_path, "import os", "", "from fastapi import FastAPI")
+    content = json.dumps(
+        {"op": "replace_range", "line_start": 3, "line_end": 3, "replacement": "x = 1"}
+    )
+    proposals = propose_repairs([_manual_finding()], _FakeClient(content=content), tmp_path, "c")
+    instruction = proposals[0].instruction
+    assert instruction is not None
+    assert instruction["expected_block"] == ["from fastapi import FastAPI"]
+
+
+def test_llm_proposal_abstains_when_the_target_file_is_missing(tmp_path: Path) -> None:
+    """No file, no block, no instruction -- abstain rather than propose blind."""
+    content = json.dumps(
+        {"op": "replace_range", "line_start": 3, "line_end": 3, "replacement": "x = 1"}
+    )
+    proposals = propose_repairs([_manual_finding()], _FakeClient(content=content), tmp_path, "c")
+    assert proposals[0].abstained is True
+    assert proposals[0].instruction is None
+
+
+def test_llm_proposal_abstains_when_the_model_range_exceeds_the_file(tmp_path: Path) -> None:
+    """A range past end-of-file is a hallucinated range, not a patchable one."""
+    _write_target(tmp_path, "only one line")
+    content = json.dumps(
+        {"op": "replace_range", "line_start": 3, "line_end": 3, "replacement": "x = 1"}
+    )
+    proposals = propose_repairs([_manual_finding()], _FakeClient(content=content), tmp_path, "c")
+    assert proposals[0].abstained is True
+    assert proposals[0].instruction is None
 
 
 def test_propose_repairs_handles_model_abstain(tmp_path: Path) -> None:
