@@ -149,7 +149,7 @@ def _apply_replace_range(instruction: dict[str, object], root: Path) -> str:
         )
         raise ValueError(msg)
     if not isinstance(expected_block, list):
-        raise ValueError("expected_block must be a list of lines")
+        raise TypeError("expected_block must be a list of lines")
     current_block = lines[line_start - 1 : line_end]
     if current_block != expected_block:
         msg = (
