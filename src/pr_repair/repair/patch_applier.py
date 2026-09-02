@@ -133,16 +133,30 @@ def _apply_replace_range(instruction: dict[str, object], root: Path) -> str:
 
     # Exact-match guard: the on-disk block must match what the finding was generated
     # against. No fuzzy matching -- drift aborts the patch.
-    if expected_block is not None:
-        if not isinstance(expected_block, list):
-            raise ValueError("expected_block must be a list of lines")
-        current_block = lines[line_start - 1 : line_end]
-        if current_block != expected_block:
-            msg = (
-                f"expected block mismatch for {file_path}:{line_start}-{line_end}; "
-                f"found={current_block!r} expected={expected_block!r}"
-            )
-            raise ValueError(msg)
+    #
+    # ``expected_block`` is MANDATORY, matching ``_apply_replace_line``'s treatment
+    # of ``expected``. It was previously checked only when present, so an
+    # instruction that simply omitted it overwrote a model-chosen line range with
+    # no content verification at all. The deterministic generator always attaches
+    # the block; the LLM proposer, the least trustworthy source, was the one path
+    # that did not -- so the guard was absent exactly where it was needed most.
+    # Refuse rather than infer: an instruction that cannot say what it expects to
+    # replace has no business replacing it.
+    if expected_block is None:
+        msg = (
+            f"replace_range requires expected_block for {file_path}:"
+            f"{line_start}-{line_end}; refusing unguarded range replacement"
+        )
+        raise ValueError(msg)
+    if not isinstance(expected_block, list):
+        raise TypeError("expected_block must be a list of lines")
+    current_block = lines[line_start - 1 : line_end]
+    if current_block != expected_block:
+        msg = (
+            f"expected block mismatch for {file_path}:{line_start}-{line_end}; "
+            f"found={current_block!r} expected={expected_block!r}"
+        )
+        raise ValueError(msg)
 
     lines[line_start - 1 : line_end] = replacement.split("\n")
     _write_lines(path, lines)
