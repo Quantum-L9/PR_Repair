@@ -65,7 +65,8 @@ def propose_repairs(
 
     results_by_id = {result.finding_id: result for result in results}
     proposals = [
-        _to_proposal(finding, results_by_id.get(finding.finding_id)) for finding in eligible
+        _to_proposal(finding, results_by_id.get(finding.finding_id), repo_root)
+        for finding in eligible
     ]
     log_event(
         "llm_proposals_complete",
@@ -76,7 +77,7 @@ def propose_repairs(
     return proposals
 
 
-def _to_proposal(finding: Finding, result: LLMResult | None) -> ProposedPatch:
+def _to_proposal(finding: Finding, result: LLMResult | None, repo_root: Path) -> ProposedPatch:
     if result is None:
         return ProposedPatch(
             finding_id=finding.finding_id,
@@ -102,10 +103,10 @@ def _to_proposal(finding: Finding, result: LLMResult | None) -> ProposedPatch:
             abstained=True,
             diagnostics=["model abstained"],
         )
-    return _parse_content(finding, result)
+    return _parse_content(finding, result, repo_root)
 
 
-def _parse_content(finding: Finding, result: LLMResult) -> ProposedPatch:
+def _parse_content(finding: Finding, result: LLMResult, repo_root: Path) -> ProposedPatch:
     def abstain(diagnostic: str, rationale: str = "") -> ProposedPatch:
         return ProposedPatch(
             finding_id=finding.finding_id,
@@ -126,7 +127,7 @@ def _parse_content(finding: Finding, result: LLMResult) -> ProposedPatch:
     if data.get("abstain") is True:
         return abstain("model abstained", rationale=str(data.get("rationale", "")))
 
-    instruction = _build_instruction(finding, data)
+    instruction = _build_instruction(finding, data, repo_root)
     if instruction is None:
         return abstain("model patch did not match the required shape")
     return ProposedPatch(
@@ -140,7 +141,9 @@ def _parse_content(finding: Finding, result: LLMResult) -> ProposedPatch:
     )
 
 
-def _build_instruction(finding: Finding, data: dict[str, object]) -> dict[str, object] | None:
+def _build_instruction(
+    finding: Finding, data: dict[str, object], repo_root: Path
+) -> dict[str, object] | None:
     if finding.file_path is None:
         return None
     if data.get("op") != "replace_range":
@@ -154,16 +157,47 @@ def _build_instruction(finding: Finding, data: dict[str, object]) -> dict[str, o
         return None
     if not isinstance(replacement, str):
         return None
+    expected_block = _read_expected_block(repo_root, finding.file_path, line_start, line_end)
+    if expected_block is None:
+        return None
     return {
         "op": "replace_range",
         "file_path": finding.file_path,
         "line_start": line_start,
         "line_end": line_end,
+        "expected_block": expected_block,
         "replacement": replacement,
         "finding_id": finding.finding_id,
         "category": finding.category,
         "source": "llm_router",
     }
+
+
+def _read_expected_block(
+    repo_root: Path, file_path: str, line_start: int, line_end: int
+) -> list[str] | None:
+    """Read the block the model proposes to replace, straight from disk.
+
+    ``line_start`` and ``line_end`` come from the model's own output. Bounds
+    checks alone do not make a hallucinated or shifted range safe -- they only
+    prove it points *somewhere*. Binding the instruction to the bytes actually
+    present means the applier aborts on drift instead of overwriting whatever
+    happens to sit at those numbers now.
+
+    Returning ``None`` abstains: an unreadable file or an out-of-range span
+    yields no instruction rather than an unguarded one.
+    """
+    target = (repo_root / file_path).resolve()
+    root = repo_root.resolve()
+    if target != root and root not in target.parents:
+        return None
+    try:
+        lines = target.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if line_end > len(lines):
+        return None
+    return lines[line_start - 1 : line_end]
 
 
 def _unavailable_proposal(finding: Finding, error: str) -> ProposedPatch:
