@@ -185,3 +185,56 @@ def test_applier_returns_finding_ids_not_just_paths(tmp_path: Path) -> None:
 
     assert result.modified_files == ["shared.py"]
     assert result.applied_finding_ids == ["f-a"]
+
+
+def test_replace_range_without_expected_block_fails_closed(tmp_path: Path) -> None:
+    """A range replacement carrying no expected block must not apply.
+
+    ``_apply_replace_line`` always required ``expected``; ``_apply_replace_range``
+    checked ``expected_block`` only when it was present, so omitting it applied
+    the patch unverified. The deterministic generator always sets it -- the LLM
+    proposer, working from model-chosen line numbers, did not. The guard was
+    missing precisely on the least trustworthy path.
+    """
+    path = tmp_path / "mod.py"
+    path.write_text("keep1\nkeep2\nkeep3\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires expected_block"):
+        apply_patch_instructions(
+            [
+                {
+                    "op": "replace_range",
+                    "file_path": "mod.py",
+                    "line_start": 1,
+                    "line_end": 2,
+                    "replacement": "pwned",
+                }
+            ],
+            tmp_path,
+        )
+
+    assert path.read_text(encoding="utf-8") == "keep1\nkeep2\nkeep3\n"
+
+
+def test_replace_range_with_null_expected_block_fails_closed(tmp_path: Path) -> None:
+    """An explicit null is the same refusal as an absent key."""
+    path = tmp_path / "mod.py"
+    path.write_text("keep1\nkeep2\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires expected_block"):
+        apply_patch_instructions(
+            [
+                {
+                    "op": "replace_range",
+                    "file_path": "mod.py",
+                    "line_start": 1,
+                    "line_end": 1,
+                    "expected_block": None,
+                    "replacement": "pwned",
+                }
+            ],
+            tmp_path,
+        )
+
+    assert path.read_text(encoding="utf-8") == "keep1\nkeep2\n"
+

@@ -52,11 +52,19 @@ def _finding(category: str = "compliance_failure", **over) -> Finding:
     return base if isinstance(base, Finding) else Finding(**base)
 
 
-def _proposal(replacement: str) -> ProposedPatch:
+def _proposal(replacement: str, expected_block: list[str] | None = None) -> ProposedPatch:
+    """Build an LLM proposal.
+
+    ``expected_block`` is mandatory for ``replace_range`` -- the applier refuses
+    an unguarded range replacement. The proposer reads it from disk; here the
+    default matches `_repo`'s ``f.py``, which the rollback path restores between
+    attempts.
+    """
     return ProposedPatch(
         finding_id="mr-1", file_path="f.py", abstained=False,
         instruction={"op": "replace_range", "file_path": "f.py", "line_start": 1,
-                     "line_end": 1, "replacement": replacement, "finding_id": "mr-1"},
+                     "line_end": 1, "replacement": replacement, "finding_id": "mr-1",
+                     "expected_block": ["OLD"] if expected_block is None else expected_block},
     )
 
 
@@ -173,3 +181,36 @@ def _run_porcelain(repo: Path) -> str:
     return subprocess.run(
         ["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True
     ).stdout.strip()
+
+
+def test_apply_refuses_a_proposal_with_no_expected_block(tmp_path: Path) -> None:
+    """Fail closed: an unguarded range replacement must not reach the file.
+
+    This is the shape the LLM proposer used to emit -- model-chosen line
+    numbers with no content to verify them against.
+    """
+    repo = _repo(tmp_path)
+    unguarded = ProposedPatch(
+        finding_id="mr-1", file_path="f.py", abstained=False,
+        instruction={"op": "replace_range", "file_path": "f.py", "line_start": 1,
+                     "line_end": 1, "replacement": "PWNED", "finding_id": "mr-1"},
+    )
+
+    pr, finding, config = _pr(), _finding(), _config(tmp_path, _CHECK_GOOD)
+
+    with pytest.raises(ValueError, match="requires expected_block"):
+        apply_llm_proposals(pr, [(finding, unguarded)], config, repo)
+    assert (repo / "f.py").read_text() == "OLD\n"
+
+
+def test_apply_aborts_when_the_expected_block_is_stale(tmp_path: Path) -> None:
+    """Content drift aborts instead of overwriting whatever is there now."""
+    repo = _repo(tmp_path)
+    stale = _proposal("NEW", expected_block=["WHAT THE MODEL THOUGHT WAS HERE"])
+
+    pr, finding, config = _pr(), _finding(), _config(tmp_path, _CHECK_GOOD)
+
+    with pytest.raises(ValueError, match="expected block mismatch"):
+        apply_llm_proposals(pr, [(finding, stale)], config, repo)
+    assert (repo / "f.py").read_text() == "OLD\n"
+
