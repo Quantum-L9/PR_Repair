@@ -1,5 +1,5 @@
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from pr_repair.config import AppConfig
 from pr_repair.repair.repair_executor import execute_repair_plan
