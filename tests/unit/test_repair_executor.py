@@ -3,7 +3,15 @@ import subprocess
 
 from pr_repair.config import AppConfig
 from pr_repair.repair.repair_executor import execute_repair_plan
-from pr_repair.types import ExecutionMode, Finding, PRRef, RepairPlan, Severity, SourceName, TierLevel
+from pr_repair.types import (
+    ExecutionMode,
+    Finding,
+    PRRef,
+    RepairPlan,
+    Severity,
+    SourceName,
+    TierLevel,
+)
 
 
 def _run(args: list[str], cwd: Path) -> None:
